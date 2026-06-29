@@ -353,8 +353,11 @@ const FIREBASE_CONFIG = {
   appId: "1:223667299081:web:52c49302fbc13c06b1e9d8"
 };
 const SHARED_DOC = "roadmaps/triactis-ete-2026";
-const LS_DATA = "triactis_roadmap_v1";
+const LS_DATA = "triactis_roadmap_v2";
 const LS_FBCFG = "triactis_fb_cfg";
+let ACCESS_CODE="";
+const CODE_HASH="374984ba";
+function hashCode(s){let h=0x811c9dc5;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return ("0000000"+h.toString(16)).slice(-8);}
 
 /* --------------------------- Taxonomie (44 tags) ------------------------- */
 const PROJECTS = {
@@ -416,7 +419,7 @@ const SEED = [
   {id:"e11",title:"Charte graphique paramétrable (theme.json + Settings)",type:"tache",start:"2026-08-10",end:"2026-08-21",progress:0,tags:["P3-Info-Mémos","Charte","M6-Déploiement"]},
   {id:"e12",title:"Teaser auto (note de synthèse anonymisée)",type:"tache",start:"2026-08-17",end:"2026-08-28",progress:0,tags:["P3-Info-Mémos","Teaser","Anonymisation"]},
   {id:"e13",title:"Frontend React analyste (upload, édition, preview, export)",type:"tache",start:"2026-08-03",end:"2026-09-05",progress:0,tags:["P3-Info-Mémos","M6-Déploiement"]},
-  {id:"e14",title:"Déploiement V1 outil IM (V1 analyste < 2 h)",type:"jalon",start:"2026-09-15",end:null,progress:0,tags:["P3-Info-Mémos","M6-Déploiement","Chemin-Critique"]},
+  {id:"e14",title:"Déploiement V1 outil IM (V1 analyste < 2 h)",type:"jalon",start:"2026-09-15",end:null,progress:0,tags:["P3-Info-Mémos","IM","M6-Déploiement","Chemin-Critique"]},
   // ---- P1 Architecture
   {id:"e15",title:"Cerveau de contexte Triactis : cadrage + archi mémoire",type:"jalon",start:"2026-06-16",end:null,progress:100,tags:["P1-Architecture","Doctrine","Documentation"]},
   {id:"e16",title:"Guide d'interview cartographie v1",type:"tache",start:"2026-06-16",end:"2026-06-17",progress:100,tags:["P1-Architecture","Documentation"]},
@@ -452,7 +455,9 @@ const SEED = [
   // ---- Transverses / quick-wins
   {id:"e45",title:"Leexi vers notes Zoho (CR de réunion IA)",type:"tache",start:"2026-06-22",end:"2026-07-04",progress:60,tags:["Zoho-CRM","Quick-Win","Adoption"]},
   {id:"e46",title:"Scraping cibles (bases CGP/CIF/COA, lettres de mission)",type:"tache",start:"2026-07-07",end:"2026-07-28",progress:25,tags:["Quick-Win","CGP","Courtage"]},
-  {id:"e47",title:"LOI : trame de négociation standardisée",type:"tache",start:"2026-08-17",end:"2026-08-28",progress:0,tags:["LOI","Courtage"]}
+  {id:"e47",title:"LOI : trame de négociation standardisée",type:"tache",start:"2026-08-17",end:"2026-08-28",progress:0,tags:["LOI","Courtage"]},
+  {id:"e48",title:"M3 Structure Planner (sélection dynamique des sections IM)",type:"tache",start:"2026-07-13",end:"2026-07-25",progress:0,tags:["P3-Info-Mémos","M3-Structure","Arbre-Décisionnel"]},
+  {id:"e49",title:"Cadrage produit outil IM (vision, KPIs cible)",type:"jalon",start:"2026-06-15",end:null,progress:100,tags:["P3-Info-Mémos","IM","Doctrine"]}
 ];
 
 /* ------------------------------- État ------------------------------------ */
@@ -540,8 +545,8 @@ async function tryStartFirebase(){
     if(!window.firebase)throw new Error("SDK indisponible");
     if(!firebase.apps.length)firebase.initializeApp(cfg);
     const db=firebase.firestore();
-    const parts=SHARED_DOC.split("/");
-    fbDoc=db.collection(parts[0]).doc(parts[1]);
+    const docId="roadmap-"+hashCode((ACCESS_CODE||"")+"-triactis");
+    fbDoc=db.collection("roadmaps").doc(docId);
     await new Promise((resolve)=>{
       let first=true;
       fbDoc.onSnapshot(snap=>{
@@ -907,13 +912,26 @@ function wire(){
   document.addEventListener("keydown",e=>{if(e.key==="Escape")$$(".scrim.open").forEach(s=>s.classList.remove("open"));});
 }
 
-async function init(){
+function start(){
   const saved=localLoad();
   state.events=saved&&saved.length?saved:SEED.map(e=>Object.assign({},e));
   setStorageUI();wire();renderAll();
-  await tryStartFirebase();
+  tryStartFirebase();
 }
-init();
+function gate(){
+  ACCESS_CODE=localStorage.getItem("triactis_code")||"";
+  if(ACCESS_CODE&&hashCode(ACCESS_CODE)===CODE_HASH){start();return;}
+  const ov=document.createElement("div");
+  ov.id="gateScrim";
+  ov.style.cssText="position:fixed;inset:0;z-index:200;background:#FAF8F3;display:flex;align-items:center;justify-content:center;padding:20px";
+  ov.innerHTML='<div style="max-width:380px;width:100%;background:#fff;border:1px solid #E9E3D6;border-radius:16px;box-shadow:0 10px 40px rgba(30,36,48,.12);padding:28px;text-align:center"><div style="width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,#2A3140,#1E2430);color:#E9CF8E;display:grid;place-items:center;font-weight:800;font-size:18px;margin:0 auto 14px">T</div><h2 style="font-size:18px;margin:0 0 5px;color:#1E2430">Suivi implémentation IA</h2><div style="font-size:13px;color:#6B7280;margin-bottom:18px">Accès réservé à l\'équipe Triactis. Entre le code partagé.</div><input id="gateInput" type="password" placeholder="Code d\'accès" autocomplete="off" style="width:100%;height:42px;padding:0 14px;border:1px solid #E9E3D6;border-radius:10px;background:#FCFBF8;font-size:15px;text-align:center;letter-spacing:.03em;color:#1E2430"><div id="gateErr" style="color:#DC2626;font-size:12.5px;height:16px;margin:8px 0"></div><button id="gateBtn" style="width:100%;height:42px;border:none;border-radius:10px;background:linear-gradient(180deg,#C8A24A,#B8923E);color:#fff;font-weight:700;font-size:14px;cursor:pointer">Entrer</button><label style="display:flex;align-items:center;gap:7px;justify-content:center;margin-top:13px;font-size:12px;color:#6B7280;cursor:pointer"><input type="checkbox" id="gateRemember" checked> Se souvenir sur cet appareil</label></div>';
+  document.body.appendChild(ov);
+  const inp=ov.querySelector("#gateInput"),btn=ov.querySelector("#gateBtn"),err=ov.querySelector("#gateErr");
+  function submit(){const v=inp.value.trim();if(hashCode(v)===CODE_HASH){ACCESS_CODE=v;if(ov.querySelector("#gateRemember").checked)localStorage.setItem("triactis_code",v);ov.remove();start();}else{err.textContent="Code incorrect.";inp.value="";inp.focus();}}
+  btn.onclick=submit;inp.onkeydown=e=>{if(e.key==="Enter")submit();};
+  setTimeout(()=>inp.focus(),60);
+}
+gate();
 </script>
 </body>
 </html>
