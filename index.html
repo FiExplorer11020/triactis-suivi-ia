@@ -926,6 +926,7 @@ function applyRoadmapPatch(d){
   return {added,updated:upd,total:state.events.length};
 }
 window.coworkApplyPatch=function(j){try{return JSON.stringify(applyRoadmapPatch(j));}catch(e){return "ERR:"+e.message;}};
+window.coworkSnapshot=function(){return JSON.stringify({events:state.events,projects:state.projects,tags:state.tags});};
 function loadJSON(txt){
   try{const r=applyRoadmapPatch(txt);$("#imStatus").innerHTML=`<span style="color:var(--ok)">✓ ${r.added} ajouté(s), ${r.updated} mis à jour (total ${r.total}).</span>`;setTimeout(()=>closeScrim("#imScrim"),900);}
   catch(err){$("#imStatus").innerHTML=`<span style="color:var(--bad)">Erreur : ${esc(err.message)}</span>`;}
