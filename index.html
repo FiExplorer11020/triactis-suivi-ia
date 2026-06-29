@@ -206,6 +206,13 @@ textarea.inp{height:auto;padding:9px 12px;resize:vertical;min-height:60px}
   .row{grid-template-columns:22px 1fr;}
   .row .ctrl{grid-column:1/-1;justify-content:flex-start}
 }
+.mg-add{display:flex;gap:8px;align-items:center;margin-top:10px}
+.mg-color{width:40px;height:36px;padding:0;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer}
+.mg-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line2)}
+.mg-name{flex:1;min-width:0;height:34px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:#FCFBF8;font-size:13px;font-weight:600;color:var(--ink)}
+.mg-del{color:var(--bad);background:none;border:1px solid transparent;cursor:pointer;font-size:12px;font-weight:600;padding:5px 9px;border-radius:7px}
+.mg-del:hover{background:#FDECEC;border-color:#F3C9C9}
+.mg-sq{width:13px;height:13px;border-radius:3px;flex:0 0 auto}
 </style>
 </head>
 <body>
@@ -220,6 +227,7 @@ textarea.inp{height:auto;padding:9px 12px;resize:vertical;min-height:60px}
     <div class="toolbtns">
       <span class="pill" id="storagePill" title="Mode de sauvegarde"><span class="dot local" id="storageDot"></span><span id="storageTxt">Local</span></span>
       <button class="btn ghost" id="btnShare" title="Activer le partage temps réel"><span class="ic">🔗</span>Partage</button>
+      <button class="btn ghost" id="btnManage" title="Gérer projets et tags"><span class="ic">⚙</span>Gérer</button>
       <button class="btn ghost" id="btnMenu" title="Exporter / importer"><span class="ic">⋯</span></button>
       <button class="btn gold" id="btnAdd"><span class="ic">＋</span>Ajouter</button>
     </div>
@@ -332,6 +340,27 @@ textarea.inp{height:auto;padding:9px 12px;resize:vertical;min-height:60px}
   </div>
 </div>
 
+<!-- Manage modal -->
+<div class="scrim" id="mgScrim">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="mhead"><h3>Gérer projets et tags</h3><button class="btn ghost" id="mgClose">✕</button></div>
+    <div class="mbody">
+      <div class="field">
+        <label>Projets</label>
+        <div id="mgProjects"></div>
+        <div class="mg-add"><input class="inp" id="mgPName" placeholder="Nouveau projet (ex : P4-Données)" autocomplete="off"><input type="color" id="mgPColor" value="#C8553D" class="mg-color" title="Couleur du projet"><button class="btn gold" id="mgPAdd">Ajouter</button></div>
+      </div>
+      <div class="field">
+        <label>Tags</label>
+        <div id="mgTags" style="max-height:240px;overflow:auto"></div>
+        <div class="mg-add"><input class="inp" id="mgTName" placeholder="Nouveau tag" autocomplete="off"><select class="inp" id="mgTProj" style="width:auto"></select><input type="color" id="mgTColor" value="#9A6A3A" class="mg-color" title="Couleur si sans projet"><button class="btn gold" id="mgTAdd">Ajouter</button></div>
+      </div>
+      <div class="note">Tout est synchronisé en temps réel pour l'équipe. Renommer ou recolorer se fait en cliquant directement sur la valeur. Supprimer un projet rend ses tags autonomes ; supprimer un tag le retire des événements.</div>
+    </div>
+    <div class="mfoot"><div class="spacer"></div><button class="btn gold" id="mgDone">Fermer</button></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"><span class="tk">✓</span><span id="toastTxt">Enregistré</span></div>
 
 <script>
@@ -360,14 +389,14 @@ const CODE_HASH="374984ba";
 function hashCode(s){let h=0x811c9dc5;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return ("0000000"+h.toString(16)).slice(-8);}
 
 /* --------------------------- Taxonomie (44 tags) ------------------------- */
-const PROJECTS = {
+const DEFAULT_PROJECTS = {
   "P1-Architecture": { color:"var(--p1)", c:"#2563EB", light:"var(--p1l)", dark:"var(--p1d)", short:"P1" },
   "P2-Modélisation": { color:"var(--p2)", c:"#0E9F6E", light:"var(--p2l)", dark:"var(--p2d)", short:"P2" },
   "P3-Info-Mémos":   { color:"var(--p3)", c:"#7C3AED", light:"var(--p3l)", dark:"var(--p3d)", short:"P3" },
   "Transverse":      { color:"var(--tx)", c:"#64748B", light:"var(--txl)", dark:"var(--txd)", short:"TR" }
 };
 /* parent: P1/P2/P3 or null (verticale/transverse). cat used for grouping in filter bar. */
-const TAG_DEFS = [
+const DEFAULT_TAGS = [
   // parents
   {n:"P1-Architecture", parent:"P1-Architecture", cat:"parent"},
   {n:"P2-Modélisation", parent:"P2-Modélisation", cat:"parent"},
@@ -400,8 +429,8 @@ const TAG_DEFS = [
   {n:"LOI",parent:null,cat:"transverse"},{n:"Quick-Win",parent:null,cat:"transverse"},
   {n:"Blocage",parent:null,cat:"transverse"},{n:"Chemin-Critique",parent:null,cat:"transverse"}
 ];
-const SPECIAL_COLORS = { "Blocage":"#DC2626","Chemin-Critique":"#D97706","Quick-Win":"#16A34A","LOI":"#475569" };
-const CAT_LABELS = { parent:"Projets", p1:"P1 · Architecture", p2:"P2 · Modélisation", p3:"P3 · Info-Mémos", verticale:"Verticales", transverse:"Transverses", custom:"Personnalisés" };
+const DEFAULT_SPECIAL = { "Blocage":"#DC2626","Chemin-Critique":"#D97706","Quick-Win":"#16A34A","LOI":"#475569" };
+const DEFAULT_CATLABELS = { parent:"Projets", p1:"P1 · Architecture", p2:"P2 · Modélisation", p3:"P3 · Info-Mémos", verticale:"Verticales", transverse:"Transverses", custom:"Personnalisés" };
 
 /* --------------------------- Roadmap pré-remplie ------------------------- */
 const SEED = [
@@ -461,7 +490,25 @@ const SEED = [
 ];
 
 /* ------------------------------- État ------------------------------------ */
-const state = { events:[], view:"suivi", filters:new Set(), mode:"local", dirtyUntil:0 };
+/* ---- Taxonomie dynamique : projets/tags editables, stockes et synchronises ---- */
+let PROJECTS={}, TAG_DEFS=[], SPECIAL_COLORS={}, CAT_LABELS={};
+function shade(hex,pct){hex=(hex||"#64748B").replace("#","");if(hex.length===3)hex=hex.split("").map(c=>c+c).join("");let n=parseInt(hex,16),r=(n>>16)&255,g=(n>>8)&255,b=n&255;if(pct>=0){r=Math.round(r+(255-r)*pct);g=Math.round(g+(255-g)*pct);b=Math.round(b+(255-b)*pct);}else{const f=1+pct;r=Math.round(r*f);g=Math.round(g*f);b=Math.round(b*f);}return "#"+[r,g,b].map(x=>("0"+x.toString(16)).slice(-2)).join("");}
+function slugifyId(x){return (x||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"")||("p"+Date.now().toString(36));}
+function seedTaxonomy(){
+  state.projects=Object.keys(DEFAULT_PROJECTS).filter(k=>k!=="Transverse").map((k,i)=>({id:(DEFAULT_PROJECTS[k].short||"").toLowerCase()||slugifyId(k),name:k,color:DEFAULT_PROJECTS[k].c,short:DEFAULT_PROJECTS[k].short,order:i}));
+  const n2i={};state.projects.forEach(pp=>n2i[pp.name]=pp.id);
+  state.tags=DEFAULT_TAGS.filter(t=>t.cat!=="parent").map(t=>({name:t.n,projectId:t.parent?n2i[t.parent]:null,color:DEFAULT_SPECIAL[t.n]||(t.cat==="verticale"?"#9A6A3A":null),cat:t.cat}));
+}
+function rebuildTaxonomy(){
+  PROJECTS={};
+  (state.projects||[]).forEach(p=>{PROJECTS[p.name]={id:p.id,c:p.color,color:p.color,light:shade(p.color,.85),dark:shade(p.color,-.4),short:p.short||p.name.slice(0,2).toUpperCase()};});
+  PROJECTS["Transverse"]={id:"_tr",c:"#64748B",color:"#64748B",light:"#E2E8F0",dark:"#475569",short:"TR"};
+  TAG_DEFS=[];SPECIAL_COLORS={};
+  (state.projects||[]).forEach(p=>TAG_DEFS.push({n:p.name,parent:p.name,cat:"parent"}));
+  (state.tags||[]).forEach(t=>{const pn=t.projectId?((state.projects.find(p=>p.id===t.projectId)||{}).name||null):null;TAG_DEFS.push({n:t.name,parent:pn,cat:t.cat||(pn?"sub":"standalone")});if(t.color)SPECIAL_COLORS[t.name]=t.color;});
+  CAT_LABELS={parent:"Projets",verticale:"Verticales",transverse:"Transverses",standalone:"Autres tags",custom:"Personnalises"};
+}
+const state = { events:[], projects:[], tags:[], view:"suivi", filters:new Set(), mode:"local", dirtyUntil:0 };
 
 /* --------------------------- Utilitaires --------------------------------- */
 const $=(s,r=document)=>r.querySelector(s);
@@ -522,7 +569,7 @@ function persist(opts){
     state.dirtyUntil=Date.now()+1500;
     clearTimeout(saveTimer);
     saveTimer=setTimeout(()=>{
-      fbDoc.set({events:state.events,updatedAt:Date.now()}).then(()=>{if(!opts.silent)showToast("Synchronisé");})
+      fbDoc.set({events:state.events,projects:state.projects,tags:state.tags,updatedAt:Date.now()}).then(()=>{if(!opts.silent)showToast("Synchronisé");})
       .catch(err=>{console.warn(err);showToast("Hors-ligne, gardé en local");localSave();});
     },opts.now?0:350);
     localSave(); // mirror locally too
@@ -530,8 +577,8 @@ function persist(opts){
     localSave(); if(!opts.silent) showToast("Enregistré");
   }
 }
-function localSave(){try{localStorage.setItem(LS_DATA,JSON.stringify({events:state.events,updatedAt:Date.now()}));}catch(e){}}
-function localLoad(){try{const r=JSON.parse(localStorage.getItem(LS_DATA)||"null");if(r&&Array.isArray(r.events))return r.events;}catch(e){}return null;}
+function localSave(){try{localStorage.setItem(LS_DATA,JSON.stringify({events:state.events,projects:state.projects,tags:state.tags,updatedAt:Date.now()}));}catch(e){}}
+function localLoad(){try{const r=JSON.parse(localStorage.getItem(LS_DATA)||"null");if(r&&Array.isArray(r.events))return r;}catch(e){}return null;}
 
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement("script");s.src=src;s.async=true;s.onload=()=>res();s.onerror=()=>rej(new Error("load "+src));document.head.appendChild(s);});}
 async function tryStartFirebase(){
@@ -552,9 +599,9 @@ async function tryStartFirebase(){
       fbDoc.onSnapshot(snap=>{
         if(Date.now()<state.dirtyUntil&&!first){return;} // ignore echoes during local edits
         const data=snap.data();
-        if(data&&Array.isArray(data.events)){applyingRemote=true;state.events=data.events;applyingRemote=false;renderAll();}
-        else if(first){ // doc absent -> seed it from current local/seed
-          fbDoc.set({events:state.events,updatedAt:Date.now()});
+        if(data&&Array.isArray(data.events)){applyingRemote=true;state.events=data.events;if(Array.isArray(data.projects)&&data.projects.length){state.projects=data.projects;state.tags=Array.isArray(data.tags)?data.tags:[];}applyingRemote=false;rebuildTaxonomy();renderAll();}
+        else if(first){
+          fbDoc.set({events:state.events,projects:state.projects,tags:state.tags,updatedAt:Date.now()});
         }
         if(first){first=false;resolve();}
       },err=>{console.warn(err);if(first){first=false;resolve();}});
@@ -585,13 +632,13 @@ function ringSVG(pct,size,color,stroke){
 }
 function renderOverview(){
   const ev=state.events, overall=avgProgress(ev);
-  const byP={};["P1-Architecture","P2-Modélisation","P3-Info-Mémos"].forEach(k=>byP[k]=avgProgress(ev.filter(e=>projectOf(e)===k)));
+  const byP={};state.projects.forEach(pp=>byP[pp.name]=avgProgress(ev.filter(e=>projectOf(e)===pp.name)));
   const done=ev.filter(e=>+e.progress>=100).length, ms=ev.filter(e=>e.type==="jalon").length;
   let html="";
   html+=`<div class="card ovc"><div class="ring">${ringSVG(overall,58,"#B8923E")}</div>
      <div><div class="lab">Avancement global</div><div class="big">${overall}<span style="font-size:14px">%</span></div>
      <div class="sm">${ev.length} éléments · ${done} terminés · ${ms} jalons</div></div></div>`;
-  [["P1-Architecture","Architecture"],["P2-Modélisation","Modélisation"],["P3-Info-Mémos","Info-Mémos"]].forEach(([k,lab])=>{
+  state.projects.map(pp=>[pp.name,pp.name]).forEach(([k,lab])=>{
     const p=PROJECTS[k], n=ev.filter(e=>projectOf(e)===k).length;
     html+=`<div class="card ovc"><div class="ring">${ringSVG(byP[k],58,p.c)}</div>
       <div><div class="pj-chip"><span class="pj-sq" style="background:${p.c}"></span>${p.short} · ${lab}</div>
@@ -604,21 +651,15 @@ function renderOverview(){
 /* ---- Filter bar ---- */
 function renderFilterBar(){
   const used=new Set();state.events.forEach(e=>(e.tags||[]).forEach(t=>used.add(t)));
-  const groups=["parent","p1","p2","p3","verticale","transverse","custom"];
   const known=allKnownTags();
-  let html=`<div class="fb-head"><span class="t">Filtrer par tag</span><span class="muted" style="font-size:12px" id="fbCount"></span></div>`;
-  groups.forEach(g=>{
-    const tags=known.filter(t=>(t.cat||"custom")===g && (g==="parent"||used.has(t.n)||state.filters.has(t.n)));
-    if(!tags.length)return;
-    html+=`<div class="fb-grp"><span class="gl">${CAT_LABELS[g]||g}</span>`;
-    tags.forEach(t=>{
-      const col=tagColor(t.n), active=state.filters.has(t.n);
-      const bg=active?col:hexA(col,.12), fg=active?"#fff":col, bd=active?col:hexA(col,.30);
-      html+=`<button class="tag${t.cat==="parent"?" parent":""}${active?" active":""}" data-tag="${esc(t.n)}" style="background:${bg};color:${fg};border-color:${bd}">
-        <span class="tdot" style="background:${active?"#fff":col}"></span>#${esc(t.n)}</button>`;
-    });
-    html+=`</div>`;
-  });
+  let html=`<div class="fb-head"><span class="t">Filtrer par tag</span></div>`;
+  const fbtag=t=>{const col=tagColor(t.n),active=state.filters.has(t.n);const bg=active?col:hexA(col,.12),fg=active?"#fff":col,bd=active?col:hexA(col,.30);return `<button class="tag${t.cat==="parent"?" parent":""}${active?" active":""}" data-tag="${esc(t.n)}" style="background:${bg};color:${fg};border-color:${bd}"><span class="tdot" style="background:${active?"#fff":col}"></span>#${esc(t.n)}</button>`;};
+  const grp=(label,tags)=>{tags=tags.filter(t=>t.cat==="parent"||used.has(t.n)||state.filters.has(t.n));if(!tags.length)return;html+=`<div class="fb-grp"><span class="gl">${esc(label)}</span>`+tags.map(fbtag).join("")+`</div>`;};
+  grp("Projets",known.filter(t=>t.cat==="parent"));
+  state.projects.forEach(p=>grp(p.name,known.filter(t=>t.cat!=="parent"&&t.parent===p.name)));
+  grp("Verticales",known.filter(t=>t.cat==="verticale"));
+  grp("Transverses",known.filter(t=>t.cat==="transverse"));
+  grp("Autres tags",known.filter(t=>!t.parent&&!["verticale","transverse","parent"].includes(t.cat)));
   html+=`<div class="fb-actions">`;
   if(state.filters.size)html+=`<button class="linklike" id="clearFilters">✕ Effacer les filtres (${state.filters.size})</button>`;
   html+=`<span class="muted" style="font-size:12px">${visibleEvents().length} / ${state.events.length} éléments affichés</span></div>`;
@@ -713,7 +754,7 @@ function renderGantt(){
   }
   const todayX=(TODAY>=min&&TODAY<=max)?daysBetween(min,TODAY)*DAYW:-1;
   // group by project
-  const order=["P1-Architecture","P2-Modélisation","P3-Info-Mémos","Transverse"];
+  const order=state.projects.map(p=>p.name).concat(["Transverse"]);
   const groups={};list.forEach(e=>{const k=projectOf(e);(groups[k]=groups[k]||[]).push(e);});
   let body="";
   order.forEach(k=>{
@@ -755,7 +796,7 @@ function renderBilan(){
   const keys=Array.from(byMonth.keys()).sort();
   if(!keys.length){$("#view").innerHTML=`<div class="card" style="padding:40px;text-align:center;color:var(--faint)">Aucun élément.</div>`;return;}
   // top: project rings
-  const order=["P1-Architecture","P2-Modélisation","P3-Info-Mémos","Transverse"];
+  const order=state.projects.map(p=>p.name).concat(["Transverse"]);
   let top=`<div class="card bilan-top" style="padding:15px"><div style="display:flex;gap:22px;flex-wrap:wrap;align-items:center">`;
   order.forEach(k=>{const items=list.filter(e=>projectOf(e)===k);if(!items.length)return;const p=PROJECTS[k];
     top+=`<div style="display:flex;align-items:center;gap:11px">${ringSVG(avgProgress(items),52,p.c)}<div><div class="pj-chip"><span class="pj-sq" style="background:${p.c}"></span>${esc(k)}</div><div class="sm muted">${items.length} éléments · ${items.filter(e=>+e.progress>=100).length} terminés</div></div></div>`;});
@@ -868,6 +909,10 @@ function loadJSON(txt){
 function wire(){
   $$(".tab").forEach(t=>t.onclick=()=>{state.view=t.dataset.view;renderView();$$(".tab").forEach(x=>x.setAttribute("aria-selected",x===t));});
   $("#btnAdd").onclick=openAdd;
+  $("#btnManage").onclick=()=>{renderManage();openScrim("#mgScrim");};
+  $("#mgClose").onclick=$("#mgDone").onclick=()=>closeScrim("#mgScrim");
+  $("#mgPAdd").onclick=addProjectMg; $("#mgTAdd").onclick=addTagMg;
+  $("#mgPName").onkeydown=e=>{if(e.key==="Enter")addProjectMg();}; $("#mgTName").onkeydown=e=>{if(e.key==="Enter")addTagMg();};
   $("#evClose").onclick=$("#evCancel").onclick=()=>closeScrim("#evScrim");
   $("#evSave").onclick=saveEvent;$("#evDelete").onclick=deleteEvent;
   $$("#fType .opt").forEach(o=>o.onclick=()=>setType(o.dataset.t));
@@ -912,9 +957,40 @@ function wire(){
   document.addEventListener("keydown",e=>{if(e.key==="Escape")$$(".scrim.open").forEach(s=>s.classList.remove("open"));});
 }
 
+/* ---- Gestion projets & tags (editable depuis le site, synchronise) ---- */
+function commitTax(all){rebuildTaxonomy();persist();renderManage();if(all)renderAll();else renderOverview();}
+function renameTagEverywhere(o,nv){state.events.forEach(ev=>{ev.tags=(ev.tags||[]).map(x=>x===o?nv:x);});}
+function addProjectMg(){const n=$("#mgPName").value.trim();if(!n)return;if(state.projects.some(p=>p.name.toLowerCase()===n.toLowerCase())){alert("Ce projet existe déjà.");return;}state.projects.push({id:slugifyId(n)+"-"+Math.random().toString(36).slice(2,5),name:n,color:$("#mgPColor").value,short:(n.replace(/[^A-Za-z0-9]/g,"").slice(0,3)||"P").toUpperCase(),order:state.projects.length});$("#mgPName").value="";commitTax(true);}
+function addTagMg(){const n=$("#mgTName").value.trim();if(!n)return;if(state.tags.some(t=>t.name.toLowerCase()===n.toLowerCase())){alert("Ce tag existe déjà.");return;}const pid=$("#mgTProj").value||null;state.tags.push({name:n,projectId:pid,color:pid?null:$("#mgTColor").value,cat:pid?"sub":"standalone"});$("#mgTName").value="";commitTax(true);}
+function renderManage(){
+  let ph="";
+  state.projects.forEach(p=>{ph+=`<div class="mg-row" data-pid="${esc(p.id)}"><input type="color" class="mg-color mg-pcolor" value="${esc(p.color)}"><input class="mg-name mg-pname" value="${esc(p.name)}"><button class="mg-del mg-pdel">Supprimer</button></div>`;});
+  $("#mgProjects").innerHTML=ph||`<div class="muted" style="font-size:12.5px">Aucun projet pour l'instant.</div>`;
+  let th="";
+  state.tags.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(t=>{
+    const opts=`<option value="">(aucun projet)</option>`+state.projects.map(p=>`<option value="${esc(p.id)}"${t.projectId===p.id?" selected":""}>${esc(p.name)}</option>`).join("");
+    const col=tagColor(t.name);
+    th+=`<div class="mg-row" data-tag="${esc(t.name)}"><span class="mg-sq" style="background:${col}"></span><input class="mg-name mg-tname" value="${esc(t.name)}"><select class="mg-name mg-tproj" style="flex:0 0 auto;width:150px">${opts}</select><button class="mg-del mg-tdel">Supprimer</button></div>`;
+  });
+  $("#mgTags").innerHTML=th||`<div class="muted" style="font-size:12.5px">Aucun tag.</div>`;
+  $("#mgTProj").innerHTML=`<option value="">(aucun projet)</option>`+state.projects.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("");
+  $$("#mgProjects .mg-row").forEach(row=>{const pid=row.dataset.pid;
+    row.querySelector(".mg-pname").onchange=e=>{const p=state.projects.find(x=>x.id===pid);if(p)p.name=e.target.value.trim()||p.name;commitTax(true);};
+    row.querySelector(".mg-pcolor").onchange=e=>{const p=state.projects.find(x=>x.id===pid);if(p)p.color=e.target.value;commitTax(true);};
+    row.querySelector(".mg-pdel").onclick=()=>{const p=state.projects.find(x=>x.id===pid);if(!p)return;if(!confirm("Supprimer le projet « "+p.name+" » ? Ses tags deviennent autonomes."))return;state.tags.forEach(t=>{if(t.projectId===pid){t.projectId=null;t.cat="standalone";if(!t.color)t.color="#64748B";}});state.projects=state.projects.filter(x=>x.id!==pid);commitTax(true);};
+  });
+  $$("#mgTags .mg-row").forEach(row=>{const nm=row.dataset.tag;
+    row.querySelector(".mg-tname").onchange=e=>{const nv=e.target.value.trim();if(!nv)return;const t=state.tags.find(x=>x.name===nm);if(t&&nv!==nm){renameTagEverywhere(t.name,nv);t.name=nv;}commitTax(true);};
+    row.querySelector(".mg-tproj").onchange=e=>{const t=state.tags.find(x=>x.name===nm);if(t){t.projectId=e.target.value||null;if(t.projectId){t.color=null;t.cat="sub";}else{t.cat="standalone";if(!t.color)t.color="#9A6A3A";}}commitTax(true);};
+    row.querySelector(".mg-tdel").onclick=()=>{if(!confirm("Supprimer le tag « "+nm+" » ? Il sera retiré des événements."))return;state.tags=state.tags.filter(x=>x.name!==nm);state.events.forEach(ev=>ev.tags=(ev.tags||[]).filter(x=>x!==nm));commitTax(true);};
+  });
+}
 function start(){
   const saved=localLoad();
-  state.events=saved&&saved.length?saved:SEED.map(e=>Object.assign({},e));
+  state.events=(saved&&saved.events&&saved.events.length)?saved.events:SEED.map(e=>Object.assign({},e));
+  if(saved&&Array.isArray(saved.projects)&&saved.projects.length){state.projects=saved.projects;state.tags=Array.isArray(saved.tags)?saved.tags:[];}
+  else{seedTaxonomy();}
+  rebuildTaxonomy();
   setStorageUI();wire();renderAll();
   tryStartFirebase();
 }
