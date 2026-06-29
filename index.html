@@ -213,6 +213,7 @@ textarea.inp{height:auto;padding:9px 12px;resize:vertical;min-height:60px}
 .mg-del{color:var(--bad);background:none;border:1px solid transparent;cursor:pointer;font-size:12px;font-weight:600;padding:5px 9px;border-radius:7px}
 .mg-del:hover{background:#FDECEC;border-color:#F3C9C9}
 .mg-sq{width:13px;height:13px;border-radius:3px;flex:0 0 auto}
+.row .deps{font-size:11px;color:var(--faint);margin-top:3px;font-weight:600}
 </style>
 </head>
 <body>
@@ -278,6 +279,10 @@ textarea.inp{height:auto;padding:9px 12px;resize:vertical;min-height:60px}
           <div class="acmenu" id="acMenu"></div>
         </div>
         <div class="achint"><span><span class="kbd">Tab</span> complète</span><span><span class="kbd">Entrée</span> ajoute</span><span><span class="kbd">↑↓</span> naviguer</span><span>nouveau mot accepté</span></div>
+      </div>
+      <div class="field">
+        <label>Conditionné à (dépendances)</label>
+        <input class="inp" id="fDeps" placeholder="Titres des tâches dont celle-ci dépend, séparés par des virgules" autocomplete="off">
       </div>
     </div>
     <div class="mfoot">
@@ -717,6 +722,7 @@ function rowHTML(e){
     <div class="main" style="cursor:pointer">
       <div class="ttl">${esc(e.title)}</div>
       <div class="meta"><span class="date">${dateStr}</span>${tagsHtml}<span class="statusbadge" style="background:${hexA(st.c,.14)};color:${st.c}">${st.l}</span></div>
+      ${(e.deps&&e.deps.length)?`<div class="deps">⟜ après : ${e.deps.map(esc).join(", ")}</div>`:""}
     </div>
     <div class="ctrl">
       <input type="range" class="slider" min="0" max="100" step="5" value="${+e.progress||0}">
@@ -829,6 +835,7 @@ function openAdd(){
   $("#fTitle").value="";setType("tache");
   $("#fStart").value=TODAY_ISO;$("#fEnd").value="";
   $("#fProg").value=0;$("#fProgV").textContent="0 %";
+  $("#fDeps").value="";
   $("#evDelete").style.display="none";
   renderChips();updateEndVisibility();openScrim("#evScrim");setTimeout(()=>$("#fTitle").focus(),50);
 }
@@ -839,6 +846,7 @@ function openEvent(id){
   $("#fTitle").value=e.title;setType(e.type);
   $("#fStart").value=e.start;$("#fEnd").value=e.end||"";
   $("#fProg").value=+e.progress||0;$("#fProgV").textContent=(+e.progress||0)+" %";
+  $("#fDeps").value=(e.deps||[]).join(", ");
   $("#evDelete").style.display="";
   renderChips();updateEndVisibility();openScrim("#evScrim");setTimeout(()=>$("#fTitle").focus(),50);
 }
@@ -883,8 +891,9 @@ function saveEvent(){
   let end=type==="jalon"?null:($("#fEnd").value||null);
   if(end&&end<start)end=start;
   const progress=+$("#fProg").value||0;
-  if(editingId){const e=state.events.find(x=>x.id===editingId);Object.assign(e,{title,type,start,end,progress,tags:draftTags.slice(),updatedAt:Date.now()});}
-  else{state.events.push({id:"e"+Date.now().toString(36),title,type,start,end,progress,tags:draftTags.slice(),createdAt:Date.now(),updatedAt:Date.now()});}
+  const deps=$("#fDeps").value.split(",").map(x=>x.trim()).filter(Boolean);
+  if(editingId){const e=state.events.find(x=>x.id===editingId);Object.assign(e,{title,type,start,end,progress,deps,tags:draftTags.slice(),updatedAt:Date.now()});}
+  else{state.events.push({id:"e"+Date.now().toString(36),title,type,start,end,progress,deps,tags:draftTags.slice(),createdAt:Date.now(),updatedAt:Date.now()});}
   closeScrim("#evScrim");persist();renderAll();
 }
 function deleteEvent(){if(!editingId)return;if(!confirm("Supprimer cet événement ?"))return;state.events=state.events.filter(e=>e.id!==editingId);closeScrim("#evScrim");persist();renderAll();}
@@ -895,14 +904,31 @@ function closeScrim(s){$(s).classList.remove("open");}
 
 /* ----------------------------- Export/Import ----------------------------- */
 function doExport(){
-  const blob=new Blob([JSON.stringify({version:1,exportedAt:new Date().toISOString(),events:state.events},null,2)],{type:"application/json"});
+  const blob=new Blob([JSON.stringify({version:2,exportedAt:new Date().toISOString(),mode:"replace",events:state.events,projects:state.projects,tags:state.tags},null,2)],{type:"application/json"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="triactis-roadmap-"+TODAY_ISO+".json";a.click();
 }
+function applyRoadmapPatch(d){
+  if(typeof d==="string")d=JSON.parse(d);
+  const mode=d.mode||"merge";
+  const norm=e=>({id:e.id||("e"+Math.random().toString(36).slice(2,9)),title:e.title||"(sans titre)",type:e.type||"tache",start:e.start||TODAY_ISO,end:e.end||null,progress:+e.progress||0,tags:Array.isArray(e.tags)?e.tags:[],deps:Array.isArray(e.deps)?e.deps:[],note:e.note||""});
+  let added=0,upd=0;
+  if(mode==="replace"){
+    if(Array.isArray(d.events))state.events=d.events.map(norm);
+    if(Array.isArray(d.projects)&&d.projects.length)state.projects=d.projects;
+    if(Array.isArray(d.tags))state.tags=d.tags;
+  }else{
+    if(Array.isArray(d.events))d.events.forEach(raw=>{const i=state.events.findIndex(x=>(raw.id&&x.id===raw.id)||(!raw.id&&x.title===raw.title));if(i>=0){const cur=state.events[i];["title","type","start","end","progress","tags","deps","note"].forEach(k=>{if(k in raw)cur[k]=raw[k];});cur.updatedAt=Date.now();upd++;}else{state.events.push(norm(raw));added++;}});
+    if(Array.isArray(d.projects))d.projects.forEach(pp=>{const i=state.projects.findIndex(x=>x.id===pp.id||x.name===pp.name);if(i>=0)state.projects[i]=Object.assign({},state.projects[i],pp);else state.projects.push(pp);});
+    if(Array.isArray(d.tags))d.tags.forEach(t=>{const i=state.tags.findIndex(x=>x.name===t.name);if(i>=0)state.tags[i]=Object.assign({},state.tags[i],t);else state.tags.push(t);});
+    if(Array.isArray(d.removeEvents))d.removeEvents.forEach(k=>{state.events=state.events.filter(x=>x.id!==k&&x.title!==k);});
+  }
+  rebuildTaxonomy();persist();renderAll();
+  return {added,updated:upd,total:state.events.length};
+}
+window.coworkApplyPatch=function(j){try{return JSON.stringify(applyRoadmapPatch(j));}catch(e){return "ERR:"+e.message;}};
 function loadJSON(txt){
-  try{const d=JSON.parse(txt);const arr=Array.isArray(d)?d:d.events;if(!Array.isArray(arr))throw new Error("Pas de tableau 'events'");
-    state.events=arr.map(e=>({id:e.id||"e"+Math.random().toString(36).slice(2),title:e.title||"(sans titre)",type:e.type||"tache",start:e.start||TODAY_ISO,end:e.end||null,progress:+e.progress||0,tags:Array.isArray(e.tags)?e.tags:[]}));
-    persist();renderAll();$("#imStatus").innerHTML=`<span style="color:var(--ok)">✓ ${state.events.length} éléments chargés.</span>`;setTimeout(()=>closeScrim("#imScrim"),700);
-  }catch(err){$("#imStatus").innerHTML=`<span style="color:var(--bad)">Erreur : ${esc(err.message)}</span>`;}
+  try{const r=applyRoadmapPatch(txt);$("#imStatus").innerHTML=`<span style="color:var(--ok)">✓ ${r.added} ajouté(s), ${r.updated} mis à jour (total ${r.total}).</span>`;setTimeout(()=>closeScrim("#imScrim"),900);}
+  catch(err){$("#imStatus").innerHTML=`<span style="color:var(--bad)">Erreur : ${esc(err.message)}</span>`;}
 }
 
 /* ----------------------------- Init / events ----------------------------- */
