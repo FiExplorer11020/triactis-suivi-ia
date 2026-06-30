@@ -275,6 +275,12 @@ textarea.inp{height:auto;padding:9px 12px;resize:vertical;min-height:60px}
 .qa-ac .ac .ack{margin-left:auto;font-size:10px;color:var(--faint);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-weight:700}
 .qa-ac .ac.sel{background:var(--gold-sf)}
 .qa-ac .ac.create{color:var(--gold-dk);font-weight:600}
+.gbanner{display:flex;align-items:center;gap:10px;background:#FEF3F2;border:1px solid #FECDCA;color:#B42318;border-radius:10px;padding:9px 13px;margin-bottom:12px;font-size:13px;cursor:pointer;font-weight:600}
+.gbanner .gx{margin-left:auto;font-weight:700;font-size:12px}
+.gbanner-detail{background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 14px;margin:-6px 0 14px;font-size:12.5px;color:var(--muted);line-height:1.6}
+.shint{font-size:11.5px;color:var(--faint);font-weight:500;margin-left:4px}
+.depchip{display:inline-flex;align-items:center;gap:6px;background:#EFF1F4;color:#3A4250;border:1px solid #DfE3EA;border-radius:999px;padding:3px 9px;font-size:12px;margin:3px 4px 0 0}
+.depchip .x{cursor:pointer;color:#8A93A3;font-weight:700}
 </style>
 </head>
 <body>
@@ -356,8 +362,12 @@ textarea.inp{height:auto;padding:9px 12px;resize:vertical;min-height:60px}
         <div class="achint"><span><span class="kbd">Tab</span> complète</span><span><span class="kbd">Entrée</span> ajoute</span><span><span class="kbd">↑↓</span> naviguer</span><span>nouveau mot accepté</span></div>
       </div>
       <div class="field">
-        <label>Conditionné à (dépendances)</label>
-        <input class="inp" id="fDeps" placeholder="Titres des tâches dont celle-ci dépend, séparés par des virgules" autocomplete="off">
+        <label>Conditionné à (dépendances) — relie à des tâches existantes</label>
+        <div class="taginput" id="depInput">
+          <input id="depText" placeholder="Tape un titre de tâche, Tab pour compléter, Entrée pour ajouter" autocomplete="off">
+          <div class="acmenu" id="depMenu"></div>
+        </div>
+        <div class="achint"><span><span class="kbd">Tab</span> complète</span><span><span class="kbd">Entrée</span> ajoute</span><span><span class="kbd">↑↓</span> naviguer</span><span>relie à une tâche réelle</span></div>
       </div>
       <div class="field">
         <label>Statut</label>
@@ -802,27 +812,74 @@ function wireRows(root){
 }
 function wireSections(){$$("#view .sec-h").forEach(h=>h.onclick=()=>{const k=h.dataset.sec;const cur=h.classList.contains("collapsed");state.collapsed[k]=!cur;renderView();});}
 
-/* ---- Vue Focus : Now / Next / Later ---- */
+/* ---- Moteur de dépendances ---- */
+function evByTitle(t){return state.events.find(x=>x.title===t);}
+function isDone(e){return statusKey(e)==="termine";}
+function depState(e){const blockers=[],missing=[],met=[];(e.deps||[]).forEach(x=>{const t=evByTitle(x);if(!t)missing.push(x);else if(!isDone(t))blockers.push(x);else met.push(x);});return{ready:blockers.length===0&&missing.length===0,blockers,missing,met};}
+function focusBucket(e){
+  if(isDone(e))return "done";
+  if(statusKey(e)==="bloque")return "blocked";
+  const ds=depState(e);
+  if(ds.blockers.length)return "waiting";
+  const t=TODAY,sd=parseD(e.start),en=parseD(e.end||e.start);
+  if((+e.progress||0)>0)return "now";
+  if(en<t)return "now";
+  if(daysBetween(t,sd)<=21)return "now";
+  return "later";
+}
+function depsLineHTML(e){
+  if(!(e.deps&&e.deps.length))return "";
+  const ds=depState(e);const parts=[];
+  if(ds.met.length)parts.push("après : "+ds.met.map(esc).join(", "));
+  if(ds.blockers.length&&!isDone(e))parts.push(`<span style="color:#B7791F">⏳ en attente : ${ds.blockers.map(esc).join(", ")}</span>`);
+  if(ds.missing.length)parts.push(`<span style="color:#DC2626">⚠ introuvable : ${ds.missing.map(esc).join(", ")}</span>`);
+  return parts.length?`<div class="deps">⟜ ${parts.join("  ·  ")}</div>`:"";
+}
+function graphIssues(){
+  const byT={};state.events.forEach(e=>byT[e.title]=e);const dangling=[],cycles=[];
+  state.events.forEach(e=>(e.deps||[]).forEach(d=>{if(!byT[d])dangling.push({from:e.title,dep:d});}));
+  const color={};state.events.forEach(e=>color[e.title]=0);
+  function dfs(t,st){const e=byT[t];if(!e)return;color[t]=1;st.push(t);(e.deps||[]).forEach(d=>{if(!byT[d])return;if(color[d]===1){const i=st.indexOf(d);cycles.push(st.slice(i).concat(d).join(" → "));}else if(color[d]===0)dfs(d,st);});st.pop();color[t]=2;}
+  state.events.forEach(e=>{if(color[e.title]===0)dfs(e.title,[]);});
+  return {dangling,cycles};
+}
+/* ---- Vue Focus : dépendance-aware ---- */
 function renderFocus(){
   const list=visibleEvents();
-  const order=[["now","À faire maintenant","hz-now"],["next","Bientôt","hz-next"],["later","Plus tard","hz-later"],["done","Terminé","hz-done"]];
+  const gi=graphIssues();
+  const order=[
+    ["now","À faire maintenant","hz-now","débloqué, actionnable"],
+    ["waiting","En attente d'une dépendance","hz-next","une autre tâche doit finir avant"],
+    ["blocked","Bloqué","hz-now","marqué bloqué"],
+    ["later","Plus tard","hz-later","débloqué mais pas urgent"],
+    ["done","Terminé","hz-done",""]
+  ];
   let html="";
-  order.forEach(([k,label,cls])=>{
-    let items=list.filter(e=>horizon(e)===k);
+  if(gi.dangling.length||gi.cycles.length){
+    const n=gi.dangling.length+gi.cycles.length,open=state.showIssues;
+    html+=`<div class="gbanner" id="giBanner">⚠ ${n} problème${n>1?"s":""} de dépendances<span class="gx">${open?"masquer":"voir le détail"} ›</span></div>`;
+    if(open){let d="";
+      if(gi.dangling.length)d+="<b>Liens cassés (titre introuvable) :</b><br>"+gi.dangling.map(x=>"• « "+esc(x.from)+" » → « "+esc(x.dep)+" »").join("<br>");
+      if(gi.cycles.length)d+=(gi.dangling.length?"<br><br>":"")+"<b>Cycles :</b><br>"+gi.cycles.map(c=>"• "+esc(c)).join("<br>");
+      html+=`<div class="gbanner-detail">${d}</div>`;}
+  }
+  order.forEach(([k,label,cls,hint])=>{
+    let items=list.filter(e=>focusBucket(e)===k);
     if(!items.length)return;
     items.sort((a,b)=>(a.start||"").localeCompare(b.start||""));
     const prog=avgProgress(items),key="h:"+k;
     const collapsed=(state.collapsed[key]!==undefined)?state.collapsed[key]:(k==="done");
     html+=`<div class="sec"><div class="sec-h${collapsed?" collapsed":""}" data-sec="${key}">
       <span class="caret">▾</span>
-      <span class="st"><span class="hbadge ${cls}">${esc(label)}</span></span>
-      <span class="mcount">${items.length} élément${items.length>1?"s":""}</span>
+      <span class="st"><span class="hbadge ${cls}">${esc(label)}</span><span class="shint">${esc(hint)}</span></span>
+      <span class="mcount">${items.length}</span>
       <span class="mbar"><i style="width:${prog}%"></i></span><span class="mpct">${prog} %</span></div>`;
     if(!collapsed)html+=`<div class="rows">`+items.map(e=>rowHTML(e)).join("")+`</div>`;
     html+=`</div>`;
   });
   if(!html)html=`<div class="card" style="padding:40px;text-align:center;color:var(--faint)">Rien à afficher avec ces filtres.</div>`;
   $("#view").innerHTML=html; wireSections(); wireRows($("#view"));
+  const gb=$("#giBanner");if(gb)gb.onclick=()=>{state.showIssues=!state.showIssues;renderView();};
 }
 
 /* ---- Vue Projets : projet -> tâche -> sous-tâche ---- */
@@ -1020,7 +1077,7 @@ function rowHTML(e,extraCls){
     <div class="main" style="cursor:pointer">
       <div class="ttl">${esc(e.title)}${isParent?` <span style="font-size:11px;color:var(--faint);font-weight:600">(${kids.length} sous-tâches)</span>`:""}</div>
       <div class="meta"><span class="date">${dateStr}</span>${tagsHtml}<span class="statusbadge" style="background:${hexA(st.c,.14)};color:${st.c}">${st.l}</span></div>
-      ${(e.deps&&e.deps.length)?`<div class="deps">⟜ après : ${e.deps.map(esc).join(", ")}</div>`:""}
+      ${depsLineHTML(e)}
     </div>
     ${ctrl}</div>`;
 }
@@ -1130,14 +1187,14 @@ function renderBilan(){
 /* =======================================================================
    MODALE ÉVÉNEMENT
    ======================================================================= */
-let editingId=null, draftTags=[], acIndex=-1;
+let editingId=null, draftTags=[], acIndex=-1, draftDeps=[], depIndex=-1;
 function openAdd(){
   editingId=null;draftTags=[];
   $("#evTitle").textContent="Ajouter un événement";
   $("#fTitle").value="";setType("tache");
   $("#fStart").value=TODAY_ISO;$("#fEnd").value="";
   $("#fProg").value=0;$("#fProgV").textContent="0 %";
-  $("#fDeps").value="";
+  draftDeps=[];renderDepChips();
   setStatus("");populateParents(null);$("#fParent").value="";
   $("#evDelete").style.display="none";
   renderChips();updateEndVisibility();openScrim("#evScrim");setTimeout(()=>$("#fTitle").focus(),50);
@@ -1149,7 +1206,7 @@ function openEvent(id){
   $("#fTitle").value=e.title;setType(e.type);
   $("#fStart").value=e.start;$("#fEnd").value=e.end||"";
   $("#fProg").value=+e.progress||0;$("#fProgV").textContent=(+e.progress||0)+" %";
-  $("#fDeps").value=(e.deps||[]).join(", ");
+  draftDeps=(e.deps||[]).slice();renderDepChips();
   setStatus(e.status||"");populateParents(id);$("#fParent").value=e.parent||"";
   $("#evDelete").style.display="";
   renderChips();updateEndVisibility();openScrim("#evScrim");setTimeout(()=>$("#fTitle").focus(),50);
@@ -1166,6 +1223,28 @@ function renderChips(){
     box.insertBefore(el,input);});
   $$(".chip .x",box).forEach(x=>x.onclick=()=>{draftTags=draftTags.filter(t=>t!==x.dataset.t);renderChips();});
 }
+function renderDepChips(){
+  const box=$("#depInput");if(!box)return;$$(".depchip",box).forEach(c=>c.remove());
+  const input=$("#depText");
+  draftDeps.forEach(t=>{const ok=!!evByTitle(t);const el=document.createElement("span");el.className="depchip";if(!ok)el.style.cssText="border-color:#FECDCA;background:#FEF3F2;color:#B42318";
+    el.innerHTML=`⟜ ${esc(t)}<span class="x" data-t="${esc(t)}">×</span>`;box.insertBefore(el,input);});
+  $$(".depchip .x",box).forEach(x=>x.onclick=()=>{draftDeps=draftDeps.filter(t=>t!==x.dataset.t);renderDepChips();});
+}
+function depSuggestions(q){
+  const dq=deburr(q);const have=new Set(draftDeps);const self=editingId?((state.events.find(e=>e.id===editingId)||{}).title):null;
+  let pool=state.events.filter(e=>e.title!==self&&!have.has(e.title));
+  if(dq)pool=pool.filter(e=>deburr(e.title).includes(dq));
+  pool.sort((a,b)=>{const aw=deburr(a.title).startsWith(dq)?0:1,bw=deburr(b.title).startsWith(dq)?0:1;return aw-bw||a.title.localeCompare(b.title);});
+  return pool.slice(0,8);
+}
+function renderDepAC(){
+  const q=$("#depText").value;const menu=$("#depMenu");const sugg=depSuggestions(q);
+  if(!sugg.length){menu.innerHTML=q?'<div class="aci" style="color:var(--faint)">Aucune tâche correspondante</div>':"";menu.classList.toggle("open",!!q);return;}
+  let html="";sugg.forEach((e,i)=>{const c=projColor(projectOf(e));html+=`<div class="aci${i===depIndex?" sel":""}" data-i="${i}" data-name="${esc(e.title)}"><span class="tdot" style="background:${c}"></span>${esc(e.title)}</div>`;});
+  menu.innerHTML=html;menu.classList.add("open");
+  $$("#depMenu .aci[data-name]").forEach(el=>el.onmousedown=ev=>{ev.preventDefault();addDep(el.dataset.name);});
+}
+function addDep(title){if(!evByTitle(title))return;if(!draftDeps.includes(title))draftDeps.push(title);$("#depText").value="";depIndex=-1;renderDepChips();renderDepAC();$("#depText").focus();}
 function acSuggestions(q){
   const dq=deburr(q);const have=new Set(draftTags);
   let pool=allKnownTags().filter(t=>!have.has(t.n));
@@ -1195,7 +1274,7 @@ function saveEvent(){
   let end=type==="jalon"?null:($("#fEnd").value||null);
   if(end&&end<start)end=start;
   const progress=+$("#fProg").value||0;
-  const deps=$("#fDeps").value.split(",").map(x=>x.trim()).filter(Boolean);
+  const deps=draftDeps.slice();
   const status=currentStatus();let parent=$("#fParent").value||null;if(parent===editingId)parent=null;
   if(editingId){const e=state.events.find(x=>x.id===editingId);Object.assign(e,{title,type,start,end,progress,deps,status,parent,tags:draftTags.slice(),updatedAt:Date.now()});}
   else{state.events.push({id:"e"+Date.now().toString(36),title,type,start,end,progress,deps,status,parent,tags:draftTags.slice(),createdAt:Date.now(),updatedAt:Date.now()});}
@@ -1280,6 +1359,20 @@ function wire(){
   $("#fProg").oninput=()=>$("#fProgV").textContent=$("#fProg").value+" %";
   $("#fTitle").oninput=()=>$("#fTitle").style.borderColor="";
   // tag input
+  const di=$("#depText"),dbox=$("#depInput");
+  if(di){
+    di.onfocus=()=>{dbox.classList.add("focus");renderDepAC();};
+    di.onblur=()=>{dbox.classList.remove("focus");setTimeout(()=>$("#depMenu").classList.remove("open"),120);};
+    di.oninput=()=>{depIndex=-1;renderDepAC();};
+    di.onkeydown=e=>{const sugg=depSuggestions(di.value);const total=sugg.length;
+      if(e.key==="Tab"){e.preventDefault();if(total>0){const pick=depIndex>=0?depIndex:0;const el=$(`#depMenu .aci[data-i='${pick}']`);if(el){di.value=el.dataset.name;depIndex=-1;renderDepAC();}}}
+      else if(e.key==="Enter"){e.preventDefault();const pick=depIndex>=0?depIndex:0;const el=$(`#depMenu .aci[data-i='${pick}']`);if(el)addDep(el.dataset.name);}
+      else if(e.key==="ArrowDown"){e.preventDefault();depIndex=Math.min(total-1,depIndex+1);renderDepAC();}
+      else if(e.key==="ArrowUp"){e.preventDefault();depIndex=Math.max(-1,depIndex-1);renderDepAC();}
+      else if(e.key==="Backspace"&&!di.value&&draftDeps.length){draftDeps.pop();renderDepChips();renderDepAC();}
+      else if(e.key==="Escape"){$("#depMenu").classList.remove("open");}
+    };
+  }
   const ti=$("#tagText"),box=$("#tagInput");
   ti.onfocus=()=>{box.classList.add("focus");renderAC();};
   ti.onblur=()=>{box.classList.remove("focus");setTimeout(()=>$("#acMenu").classList.remove("open"),120);};
