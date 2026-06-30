@@ -216,7 +216,7 @@ textarea.inp{height:auto;padding:9px 12px;resize:vertical;min-height:60px}
 .row .deps{font-size:11px;color:var(--faint);margin-top:3px;font-weight:600}
 .quickbar{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:7px 10px;margin-bottom:12px}
 .quickbar .qa-ic{color:var(--gold-dk);font-weight:800;font-size:16px;padding:0 4px}
-.quickbar input{flex:1;border:none;background:transparent;outline:none;font-size:14px;height:30px;color:var(--ink)}
+.quickbar .qa-inwrap input{border:none;background:transparent;outline:none;font-size:14px;height:30px;color:var(--ink);width:100%}
 .quickbar .qa-k{font-size:11px;font-weight:700;color:var(--muted);height:28px;padding:0 8px}
 .fb2{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .preset{height:28px;padding:0 11px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
@@ -262,6 +262,19 @@ textarea.inp{height:auto;padding:9px 12px;resize:vertical;min-height:60px}
 .viewbar{display:flex;align-items:center;gap:8px;margin:-4px 0 12px;flex-wrap:wrap}
 .viewbar .vtoggle{font-size:12px;color:var(--muted);font-weight:600;cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 10px}
 .viewbar .vtoggle.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.quickbar{flex-wrap:wrap}
+.qa-inwrap{position:relative;flex:1;min-width:200px}
+.qa-sel{height:30px;border:1px solid var(--line);border-radius:8px;background:#FCFBF8;font-size:12.5px;color:var(--ink);padding:0 7px;max-width:150px;cursor:pointer}
+.qa-date{height:30px;border:1px solid var(--line);border-radius:8px;background:#FCFBF8;font-size:12px;color:var(--muted);padding:0 8px}
+.qa-add{height:30px;padding:0 13px;font-size:13px}
+.qa-k{font-size:11px;font-weight:700;color:var(--muted);height:28px;padding:0 8px}
+.qa-ac{position:absolute;top:36px;left:0;min-width:250px;max-width:340px;background:#fff;border:1px solid var(--line);border-radius:11px;box-shadow:0 16px 44px rgba(20,24,34,.20);z-index:75;overflow:hidden;padding:5px}
+.qa-ac[hidden]{display:none}
+.qa-ac .ac{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--ink)}
+.qa-ac .ac .acd{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+.qa-ac .ac .ack{margin-left:auto;font-size:10px;color:var(--faint);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-weight:700}
+.qa-ac .ac.sel{background:var(--gold-sf)}
+.qa-ac .ac.create{color:var(--gold-dk);font-weight:600}
 </style>
 </head>
 <body>
@@ -294,7 +307,14 @@ textarea.inp{height:auto;padding:9px 12px;resize:vertical;min-height:60px}
 
   <div class="quickbar">
     <span class="qa-ic">＋</span>
-    <input id="qa" placeholder="Ajout rapide : Titre #tag 50% 11/07>24/07 !jalon après:Tâche" autocomplete="off">
+    <div class="qa-inwrap">
+      <input id="qa" placeholder="Nouvelle tâche…  (tape # pour un tag, Tab pour compléter)" autocomplete="off">
+      <div class="qa-ac" id="qaAc" hidden></div>
+    </div>
+    <select id="qaType" class="qa-sel" aria-label="Type"></select>
+    <select id="qaProj" class="qa-sel" aria-label="Projet"></select>
+    <input id="qaDate" type="date" class="qa-date" aria-label="Échéance (facultatif)">
+    <button class="btn gold qa-add" id="qaAddBtn"><span class="ic">＋</span>Ajouter</button>
     <button class="btn ghost qa-k" id="qaCmd" title="Palette de commandes (Ctrl/Cmd+K)">⌘K</button>
   </div>
   <div class="filterbar" id="filterbar"></div>
@@ -708,7 +728,7 @@ function visibleEvents(){
 }
 function avgProgress(list){if(!list.length)return 0;return Math.round(list.reduce((s,e)=>s+(+e.progress||0),0)/list.length);}
 
-function renderAll(){renderOverview();renderFilterBar();renderView();}
+function renderAll(){renderOverview();renderFilterBar();renderView();populateQuickAdd();}
 
 /* ---- Overview strip ---- */
 function ringSVG(pct,size,color,stroke){
@@ -877,6 +897,44 @@ function quickAdd(str){
   const newtags=ev.tags.filter(t=>!known.some(k=>k.n===t)).map(t=>({name:t,projectId:null,color:"#64748B",cat:"standalone"}));
   applyRoadmapPatch({mode:"merge",events:[ev],tags:newtags});
   showToast("Ajouté : "+ev.title);
+}
+/* ---- Composer d'ajout rapide : sélecteurs + autocomplétion ---- */
+function populateQuickAdd(){
+  const ty=$("#qaType"); if(ty&&!ty.dataset.init){ty.innerHTML='<option value="tache">Tâche</option><option value="evenement">Événement</option><option value="jalon">Jalon</option>';ty.dataset.init="1";}
+  const pr=$("#qaProj"); if(pr){const cur=pr.value;pr.innerHTML='<option value="">Projet…</option>'+state.projects.map(p=>`<option value="${esc(p.name)}">${esc(p.short||p.name)}</option>`).join("");if(cur&&state.projects.some(p=>p.name===cur))pr.value=cur;}
+}
+let qaAcItems=[],qaAcSel=0;
+function qaTokenAtCaret(){const el=$("#qa");const v=el.value,c=el.selectionStart;let s=v.lastIndexOf(" ",c-1)+1;let e=v.indexOf(" ",c);if(e<0)e=v.length;return{full:v.slice(s,e),upto:v.slice(s,c),s,e};}
+function qaHideAc(){const a=$("#qaAc");if(a){a.hidden=true;a.innerHTML="";}qaAcItems=[];}
+function qaUpdateAc(){
+  const el=$("#qa");if(!el)return;const {upto}=qaTokenAtCaret();
+  if(!upto.startsWith("#")){qaHideAc();return;}
+  const q=deburr(upto.slice(1));
+  let pool=allKnownTags().filter(t=>deburr(t.n).includes(q));
+  pool.sort((a,b)=>{const aw=deburr(a.n).startsWith(q)?0:1,bw=deburr(b.n).startsWith(q)?0:1;return aw-bw||a.n.localeCompare(b.n);});
+  qaAcItems=pool.slice(0,6).map(t=>({tag:t.n,color:tagColor(t.n),create:false}));
+  if(q&&!allKnownTags().some(t=>deburr(t.n)===q))qaAcItems.push({tag:upto.slice(1),color:"#64748B",create:true});
+  if(!qaAcItems.length){qaHideAc();return;}
+  qaAcSel=0;const a=$("#qaAc");
+  a.innerHTML=qaAcItems.map((it,i)=>`<div class="ac${i===0?" sel":""}${it.create?" create":""}" data-i="${i}"><span class="acd" style="background:${it.color}"></span>${it.create?("Créer le tag #"+esc(it.tag)):("#"+esc(it.tag))}<span class="ack">Tab</span></div>`).join("");
+  a.hidden=false;
+  $$("#qaAc .ac").forEach(el2=>el2.onmousedown=ev=>{ev.preventDefault();qaAccept(+el2.dataset.i);});
+}
+function qaAccept(i){const it=qaAcItems[i];if(!it)return;const el=$("#qa");const {s,e}=qaTokenAtCaret();const v=el.value;const ins="#"+it.tag+" ";el.value=v.slice(0,s)+ins+v.slice(e);const pos=s+ins.length;el.setSelectionRange(pos,pos);qaHideAc();el.focus();}
+function qaSubmit(){
+  const el=$("#qa");if(!el)return;
+  const ev=parseQuickAdd(el.value);
+  const t=($("#qaType")||{}).value; if(t)ev.type=t;
+  const proj=($("#qaProj")||{}).value; if(proj)ev.tags=[proj].concat(ev.tags.filter(x=>x!==proj));
+  const dd=($("#qaDate")||{}).value; if(dd)ev.start=dd;
+  if(ev.type==="jalon")ev.end=null;
+  if(!ev.title){showToast("Donne un titre à la tâche");el.focus();return;}
+  ev.id="e"+Date.now().toString(36);
+  const known=allKnownTags();
+  const newtags=ev.tags.filter(t=>!known.some(k=>k.n===t)).map(t=>({name:t,projectId:null,color:"#64748B",cat:"standalone"}));
+  applyRoadmapPatch({mode:"merge",events:[ev],tags:newtags});
+  showToast("Ajouté : "+ev.title);
+  el.value="";if($("#qaProj"))$("#qaProj").value="";if($("#qaDate"))$("#qaDate").value="";if($("#qaType"))$("#qaType").value="tache";qaHideAc();el.focus();
 }
 
 /* ---- Palette de commandes ⌘K ---- */
@@ -1184,8 +1242,22 @@ function wire(){
   $$(".tab").forEach(t=>t.onclick=()=>{state.view=t.dataset.view;renderView();$$(".tab").forEach(x=>x.setAttribute("aria-selected",x===t));});
   $("#btnAdd").onclick=openAdd;
   // Quick-add + palette + statut
-  const qa=$("#qa");if(qa)qa.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();quickAdd(qa.value);qa.value="";}};
+  const qa=$("#qa");
+  if(qa){
+    qa.addEventListener("input",qaUpdateAc);
+    qa.addEventListener("keydown",e=>{
+      const open=!$("#qaAc").hidden;
+      if(open&&((e.key==="Tab"&&!e.shiftKey)||e.key==="Enter")){e.preventDefault();qaAccept(qaAcSel);return;}
+      if(open&&e.key==="ArrowDown"){e.preventDefault();qaAcSel=Math.min(qaAcItems.length-1,qaAcSel+1);$$("#qaAc .ac").forEach((el,i)=>el.classList.toggle("sel",i===qaAcSel));return;}
+      if(open&&e.key==="ArrowUp"){e.preventDefault();qaAcSel=Math.max(0,qaAcSel-1);$$("#qaAc .ac").forEach((el,i)=>el.classList.toggle("sel",i===qaAcSel));return;}
+      if(open&&e.key==="Escape"){e.preventDefault();qaHideAc();return;}
+      if(!open&&e.key==="Enter"){e.preventDefault();qaSubmit();}
+    });
+    qa.addEventListener("blur",()=>setTimeout(qaHideAc,150));
+  }
+  if($("#qaAddBtn"))$("#qaAddBtn").onclick=qaSubmit;
   const qc=$("#qaCmd");if(qc)qc.onclick=openCmdk;
+  populateQuickAdd();
   $$("#fStatus .opt").forEach(o=>o.onclick=()=>setStatus(o.dataset.s));
   const ci=$("#cmdkInput");
   if(ci){ci.oninput=()=>renderCmdk(ci.value);
