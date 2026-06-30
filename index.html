@@ -109,20 +109,21 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .gantt-scroll{overflow-x:auto;overflow-y:visible}
 .gantt{position:relative;min-width:760px}
 .g-axis{position:sticky;top:0;z-index:5;display:flex;background:linear-gradient(180deg,#fff,#FCFAF5);border-bottom:1px solid var(--line)}
-.g-left-h{flex:0 0 var(--leftw);position:sticky;left:0;z-index:6;background:#fff;border-right:1px solid var(--line);padding:9px 13px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:flex;align-items:flex-end}
+.g-left-h{flex:0 0 var(--leftw);position:sticky;left:0;z-index:6;background:#fff;border-right:1px solid var(--line);padding:9px 13px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:flex;align-items:flex-end;box-shadow:3px 0 6px -3px rgba(20,24,34,.10)}
 .g-months{position:relative;flex:1 1 auto;height:46px}
 .g-mo{position:absolute;top:0;height:100%;border-left:1px solid var(--line2);font-size:11.5px;font-weight:700;color:var(--muted);padding:6px 0 0 8px;text-transform:capitalize}
 .g-mo .wk{position:absolute;top:26px;font-size:9.5px;color:var(--faint);font-weight:600}
 .g-body{position:relative}
-.g-grp-h{display:flex;align-items:center;gap:8px;background:#FBF9F4;border-bottom:1px solid var(--line2);border-top:1px solid var(--line2);padding:6px 13px;position:sticky;left:0}
+.g-grp-h{display:flex;align-items:center;gap:8px;background:#FBF9F4;border-bottom:1px solid var(--line2);border-top:1px solid var(--line2);padding:6px 13px;position:sticky;left:0;z-index:3}
 .g-grp-h .sq{width:10px;height:10px;border-radius:3px}
 .g-grp-h .nm{font-size:12px;font-weight:800;letter-spacing:.01em}
 .g-grp-h .ct{font-size:11px;color:var(--faint);font-weight:600}
 .g-row{display:flex;align-items:stretch;border-bottom:1px solid var(--line2);min-height:34px}
 .g-row:hover{background:#FCFAF4}
-.g-left{flex:0 0 var(--leftw);position:sticky;left:0;z-index:3;background:inherit;border-right:1px solid var(--line);padding:6px 13px;display:flex;align-items:center;gap:8px;background:#fff}
+.g-left{flex:0 0 var(--leftw);position:sticky;left:0;z-index:3;border-right:1px solid var(--line);padding:6px 13px;display:flex;align-items:center;gap:8px;background:#fff;overflow:hidden;box-shadow:3px 0 6px -3px rgba(20,24,34,.10)}
 .g-row:hover .g-left{background:#FCFAF4}
-.g-left .gl-ttl{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g-left .typ{flex:0 0 auto}
+.g-left .gl-ttl{flex:1 1 auto;min-width:0;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .g-track{position:relative;flex:1 1 auto}
 .g-vline{position:absolute;top:0;bottom:0;width:1px;background:var(--line2);pointer-events:none;z-index:1}
 .g-todayline{position:absolute;top:0;bottom:0;width:2px;background:rgba(220,38,38,.5);pointer-events:none;z-index:2}
@@ -1118,7 +1119,7 @@ function renderGantt(){
   list.forEach(e=>{const s=parseD(e.start),en=parseD(e.end||e.start);if(!min||s<min)min=s;if(!max||en>max)max=en;});
   min=new Date(min.getFullYear(),min.getMonth(),1);
   max=new Date(max.getFullYear(),max.getMonth()+1,0);
-  const DAYW=state.gz||9, LEFTW=270, totalDays=daysBetween(min,max)+1, width=totalDays*DAYW;
+  const DAYW=state.gz||9, LEFTW=300, totalDays=daysBetween(min,max)+1, width=totalDays*DAYW;
   const xOf=d=>daysBetween(min,parseD(d))*DAYW;
   let axis="",vlines="";const cur=new Date(min);
   while(cur<=max){
