@@ -124,8 +124,19 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .g-row:hover .g-left{background:#FCFAF4}
 .g-left .gl-ttl{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .g-track{position:relative;flex:1 1 auto}
-.g-today{position:absolute;top:0;bottom:0;width:2px;background:rgba(220,38,38,.55);z-index:4}
-.g-today .lab{position:absolute;top:-1px;left:3px;font-size:9px;font-weight:800;color:var(--bad)}
+.g-vline{position:absolute;top:0;bottom:0;width:1px;background:var(--line2);pointer-events:none;z-index:1}
+.g-todayline{position:absolute;top:0;bottom:0;width:2px;background:rgba(220,38,38,.5);pointer-events:none;z-index:2}
+.g-todayflag{position:absolute;top:24px;font-size:9px;font-weight:800;color:#fff;background:var(--bad);padding:1px 6px;border-radius:4px;transform:translateX(-50%);z-index:7;white-space:nowrap}
+.g-toolbar{display:flex;align-items:center;gap:9px;padding:8px 12px;border-bottom:1px solid var(--line2);flex-wrap:wrap}
+.g-toolbar .zlabel{font-size:11.5px;color:var(--faint);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.g-zoom{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.g-zoom button{border:none;background:#fff;font-size:12px;font-weight:600;color:var(--muted);padding:5px 11px;cursor:pointer;border-right:1px solid var(--line)}
+.g-zoom button:last-child{border-right:none}
+.g-zoom button:hover{background:#FAF7F0}
+.g-zoom button.active{background:var(--ink);color:#fff}
+.g-jump{height:29px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.g-jump:hover{border-color:#DAD2C0}
+.g-jump .pin{width:7px;height:7px;border-radius:50%;background:var(--bad)}
 .bar{position:absolute;top:50%;transform:translateY(-50%);height:16px;border-radius:6px;overflow:hidden;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .bar > i{display:block;height:100%}
 .bar .lbl{position:absolute;left:7px;top:50%;transform:translateY(-50%);font-size:10px;font-weight:800;color:rgba(255,255,255,.92);white-space:nowrap;text-shadow:0 1px 1px rgba(0,0,0,.25)}
@@ -1107,25 +1118,26 @@ function renderGantt(){
   list.forEach(e=>{const s=parseD(e.start),en=parseD(e.end||e.start);if(!min||s<min)min=s;if(!max||en>max)max=en;});
   min=new Date(min.getFullYear(),min.getMonth(),1);
   max=new Date(max.getFullYear(),max.getMonth()+1,0);
-  const totalDays=daysBetween(min,max)+1, DAYW=9, LEFTW=270, width=totalDays*DAYW;
+  const DAYW=state.gz||9, LEFTW=270, totalDays=daysBetween(min,max)+1, width=totalDays*DAYW;
   const xOf=d=>daysBetween(min,parseD(d))*DAYW;
-  // months axis
-  let axis="";const cur=new Date(min);
+  let axis="",vlines="";const cur=new Date(min);
   while(cur<=max){
-    const mk=monthKey(cur),x=daysBetween(min,cur)*DAYW;
+    const x=daysBetween(min,cur)*DAYW;
     const dim=new Date(cur.getFullYear(),cur.getMonth()+1,0).getDate();
     axis+=`<div class="g-mo" style="left:${x}px;width:${dim*DAYW}px">${MONTHS_SH[cur.getMonth()]} ${String(cur.getFullYear()).slice(2)}</div>`;
+    vlines+=`<div class="g-vline" style="left:${LEFTW+x}px"></div>`;
     cur.setMonth(cur.getMonth()+1);
   }
+  if(DAYW>=18){const w=new Date(min);const dow=w.getDay();w.setDate(w.getDate()+((dow===1)?0:((8-dow)%7)));
+    while(w<=max){const x=daysBetween(min,w)*DAYW;vlines+=`<div class="g-vline" style="left:${LEFTW+x}px;opacity:.45"></div>`;w.setDate(w.getDate()+7);}}
   const todayX=(TODAY>=min&&TODAY<=max)?daysBetween(min,TODAY)*DAYW:-1;
-  // group by project
-  const order=state.projects.map(p=>p.name).concat(["Transverse"]);
+  const order=state.projects.map(pp=>pp.name).concat(["Transverse"]);
   const groups={};list.forEach(e=>{const k=projectOf(e);(groups[k]=groups[k]||[]).push(e);});
   let body="";
   order.forEach(k=>{
     const items=(groups[k]||[]).slice().sort((a,b)=>(a.start||"").localeCompare(b.start||""));
-    if(!items.length)return;const p=PROJECTS[k];
-    body+=`<div class="g-grp-h" style="width:${LEFTW+width}px"><span class="sq" style="background:${p.c}"></span><span class="nm" style="color:${p.dark}">${esc(k)}</span><span class="ct">${items.length} · ${avgProgress(items)} %</span></div>`;
+    if(!items.length)return;const p=PROJECTS[k]||PROJECTS.Transverse||{c:"#64748B",dark:"#334155"};
+    body+=`<div class="g-grp-h" style="width:${LEFTW+width}px"><span class="sq" style="background:${p.c}"></span><span class="nm" style="color:${p.dark||p.c}">${esc(k)}</span><span class="ct">${items.length} · ${avgProgress(items)} %</span></div>`;
     items.forEach(e=>{
       const x=Math.max(0,xOf(e.start));
       let track="";
@@ -1141,15 +1153,20 @@ function renderGantt(){
       }
       body+=`<div class="g-row" data-id="${e.id}">
         <div class="g-left"><span class="typ" style="color:${p.c};font-size:12px">${TYPE_ICON[e.type]}</span><span class="gl-ttl" title="${esc(e.title)}">${esc(e.title)}</span></div>
-        <div class="g-track" style="width:${width}px">${todayX>=0?`<div class="g-today" style="left:${todayX}px"><span class="lab">auj.</span></div>`:""}${track}</div></div>`;
+        <div class="g-track" style="width:${width}px">${track}</div></div>`;
     });
   });
-  const html=`<div class="gantt-wrap"><div class="gantt-scroll"><div class="gantt" style="--leftw:${LEFTW}px;width:${LEFTW+width}px">
-    <div class="g-axis"><div class="g-left-h" style="width:${LEFTW}px">Élément</div><div class="g-months" style="width:${width}px">${axis}${todayX>=0?`<div class="g-today" style="left:${todayX}px"><span class="lab">auj.</span></div>`:""}</div></div>
-    <div class="g-body">${body}</div></div></div>
-    <div style="padding:9px 14px;border-top:1px solid var(--line2);display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted)">
-      <span>◇ losange = jalon</span><span>▮ barre claire = durée · remplissage foncé = % réalisé</span><span style="color:var(--bad)">┃ ligne rouge = aujourd'hui</span></div></div>`;
+  const lines=vlines+(todayX>=0?`<div class="g-todayline" style="left:${LEFTW+todayX}px"></div>`:"");
+  const zlevels=[["Trimestre",4],["Mois",9],["Semaine",20],["Jour",40]];
+  const toolbar=`<div class="g-toolbar"><span class="zlabel">Échelle</span><div class="g-zoom">${zlevels.map(([l,v])=>`<button data-z="${v}" class="${DAYW===v?"active":""}">${l}</button>`).join("")}</div>${todayX>=0?`<button class="g-jump" id="gJump"><span class="pin"></span>Aujourd'hui</button>`:""}<span style="margin-left:auto;font-size:11.5px;color:var(--faint)">◇ jalon · ▮ durée / remplissage = % · <span style="color:var(--bad)">┃ aujourd'hui</span></span></div>`;
+  const html=`<div class="gantt-wrap">${toolbar}<div class="gantt-scroll"><div class="gantt" style="--leftw:${LEFTW}px;width:${LEFTW+width}px">
+    <div class="g-axis"><div class="g-left-h" style="width:${LEFTW}px">Élément</div><div class="g-months" style="width:${width}px">${axis}${todayX>=0?`<div class="g-todayflag" style="left:${todayX}px">aujourd'hui</div>`:""}</div></div>
+    <div class="g-body">${lines}${body}</div></div></div></div>`;
   $("#view").innerHTML=html;
+  const sc=$("#view .gantt-scroll");
+  if(sc&&todayX>=0)sc.scrollLeft=Math.max(0,todayX-160);
+  $$("#view .g-zoom button").forEach(b=>b.onclick=()=>{state.gz=+b.dataset.z;renderGantt();});
+  const jb=$("#gJump");if(jb)jb.onclick=()=>{const s2=$("#view .gantt-scroll");if(s2)s2.scrollTo({left:Math.max(0,todayX-160),behavior:"smooth"});};
   $$("#view .g-row").forEach(r=>r.onclick=()=>openEvent(r.dataset.id));
 }
 
