@@ -293,6 +293,41 @@ textarea.inp{height:auto;padding:9px 12px;resize:vertical;min-height:60px}
 .shint{font-size:11.5px;color:var(--faint);font-weight:500;margin-left:4px}
 .depchip{display:inline-flex;align-items:center;gap:6px;background:#EFF1F4;color:#3A4250;border:1px solid #DfE3EA;border-radius:999px;padding:3px 9px;font-size:12px;margin:3px 4px 0 0}
 .depchip .x{cursor:pointer;color:#8A93A3;font-weight:700}
+/* ===== Vue « Aujourd'hui » ===== */
+.td-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:2px 2px 16px}
+.td-head .td-date{font-size:20px;font-weight:750;letter-spacing:-.02em}
+.td-head .td-momentum{font-size:13px;color:var(--muted);font-weight:600}
+.td-hero{position:relative;padding:18px 20px;margin-bottom:20px;border-radius:var(--radius);background:linear-gradient(180deg,#FFFDF7,#FFFFFF);border:1px solid var(--gold);box-shadow:0 1px 3px rgba(184,146,62,.14),0 12px 32px rgba(184,146,62,.10)}
+.td-hero .lab{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--gold-dk);display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.td-hero .lab .pj-sq{width:9px;height:9px}
+.td-hero .htitle{font-size:21px;font-weight:750;letter-spacing:-.02em;line-height:1.25}
+.td-hero .hmeta{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--muted)}
+.td-hero .hnote{margin-top:10px;font-size:13px;color:var(--ink);background:var(--gold-sf);border-radius:9px;padding:9px 12px;line-height:1.45}
+.td-hero .deps{margin-top:9px}
+.td-hero .hact{display:flex;gap:9px;margin-top:15px;flex-wrap:wrap}
+.td-emptyhero{background:var(--panel);border-color:var(--line);box-shadow:var(--shadow);padding:26px 22px;text-align:center;color:var(--muted);font-size:14px;line-height:1.5}
+.td-cols{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;align-items:start}
+@media(max-width:880px){.td-cols{grid-template-columns:1fr}}
+.td-block{margin-bottom:14px}
+.td-block > .bh{display:flex;align-items:center;gap:10px;margin:2px 2px 10px}
+.td-block > .bh .bt{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.td-block > .bh .bn{font-size:12px;font-weight:700;color:var(--faint)}
+.td-seg{display:inline-flex;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px;margin-left:auto}
+.td-seg button{height:24px;padding:0 12px;border-radius:999px;font-size:12px;font-weight:700;color:var(--muted)}
+.td-seg button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.td-done{display:flex;flex-direction:column;gap:5px}
+.td-di{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;border:1px solid var(--line);background:var(--panel);cursor:pointer;transition:.1s}
+.td-di:hover{border-color:#DAD2C0;transform:translateX(2px)}
+.td-di .chk{width:18px;height:18px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:900;color:#fff}
+.td-di .tt{flex:1 1 auto;min-width:0;font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.td-di .pr{font-size:12px;font-weight:800;flex:0 0 auto}
+.td-daygrp{font-size:11px;font-weight:800;color:var(--faint);text-transform:uppercase;letter-spacing:.04em;margin:12px 2px 4px}
+.td-more{margin-top:9px;font-size:12.5px;font-weight:700;color:var(--gold-dk);cursor:pointer;user-select:none}
+.td-more:hover{text-decoration:underline}
+.td-watch .row-mini{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;border:1px solid var(--line);border-left-width:3px;background:var(--panel);cursor:pointer;margin-bottom:5px;transition:.1s}
+.td-watch .row-mini:hover{border-color:#DAD2C0;transform:translateX(2px)}
+.td-watch .row-mini .w-why{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;flex:0 0 auto}
+.td-watch .row-mini .tt{flex:1 1 auto;min-width:0;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style>
 </head>
 <body>
@@ -316,7 +351,8 @@ textarea.inp{height:auto;padding:9px 12px;resize:vertical;min-height:60px}
   <div class="ov" id="overview"></div>
 
   <div class="tabs" role="tablist">
-    <button class="tab" role="tab" data-view="focus" aria-selected="true">✦ Focus</button>
+    <button class="tab" role="tab" data-view="today" aria-selected="true">☀ Aujourd'hui</button>
+    <button class="tab" role="tab" data-view="focus" aria-selected="false">✦ Focus</button>
     <button class="tab" role="tab" data-view="projets" aria-selected="false">🗂 Projets</button>
     <button class="tab" role="tab" data-view="kanban" aria-selected="false">▦ Kanban</button>
     <button class="tab" role="tab" data-view="gantt" aria-selected="false">📊 Gantt</button>
@@ -631,7 +667,7 @@ function rebuildTaxonomy(){
   (state.tags||[]).forEach(t=>{const pn=t.projectId?((state.projects.find(p=>p.id===t.projectId)||{}).name||null):null;TAG_DEFS.push({n:t.name,parent:pn,cat:t.cat||(pn?"sub":"standalone")});if(t.color)SPECIAL_COLORS[t.name]=t.color;});
   CAT_LABELS={parent:"Projets",verticale:"Verticales",transverse:"Transverses",standalone:"Autres tags",custom:"Personnalises"};
 }
-const state = { events:[], projects:[], tags:[], view:"focus", filters:new Set(), preset:"", search:"", group:"projet", filtersOpen:false, collapsed:{}, savedViews:[], mode:"local", dirtyUntil:0 };
+const state = { events:[], projects:[], tags:[], view:"today", filters:new Set(), preset:"", search:"", group:"projet", filtersOpen:false, collapsed:{}, savedViews:[], mode:"local", dirtyUntil:0, tdRange:"today", tdMore:false };
 
 /* --------------------------- Utilitaires --------------------------------- */
 const $=(s,r=document)=>r.querySelector(s);
@@ -855,6 +891,101 @@ function graphIssues(){
   state.events.forEach(e=>{if(color[e.title]===0)dfs(e.title,[]);});
   return {dangling,cycles};
 }
+/* =======================================================================
+   VUE « AUJOURD'HUI » : nudge à l'action (une action à la fois)
+   Design comportemental volontairement sobre :
+   - 1 seule prochaine action mise en avant (réduit le coût de décision),
+   - momentum visible : ce qui a bougé aujourd'hui (boucle à finir),
+   - enchaînement « même direction » : projets déjà avancés priorisés,
+   - progression proche de 100 % d'abord (effet goal-gradient).
+   « Fait » = tâches feuilles dont updatedAt tombe dans la fenêtre (jour ou
+   7 jours). updatedAt est horodaté à chaque changement de progression ou
+   édition ; un élément pré-semé jamais touché n'apparaît donc pas ici.
+   ======================================================================= */
+function tdStamp(e){return e.updatedAt||e.createdAt||0;}
+function tdRangeStart(){return state.tdRange==="week"?(TODAY.getTime()-6*86400000):TODAY.getTime();}
+function tdInRange(e){const t=tdStamp(e);return t>=tdRangeStart()&&t<TODAY.getTime()+86400000;}
+function isLeaf(e){return childrenOf(e).length===0;}
+function tdComplete(id){const e=state.events.find(x=>x.id===id);if(!e)return;e.progress=100;e.status="termine";e.updatedAt=Date.now();recomputeParents();persist();showToast("Terminée ✓ bravo");renderOverview();renderView();}
+function tdStatusBadge(e){const s=statusOf(e);return `<span class="statusbadge" style="background:${hexA(s.c,.14)};color:${s.c}">${s.l}</span>`;}
+function tdDoneItem(e){const done=isDone(e),c=done?"var(--ok)":"var(--warn)";return `<div class="td-di" data-open="${e.id}"><span class="chk" style="background:${c}">${done?"✓":"◔"}</span><span class="tt">${esc(e.title)}</span><span class="pr" style="color:${c}">${done?100:(+e.progress||0)} %</span></div>`;}
+function renderToday(){
+  const doneT=state.events.filter(e=>isLeaf(e)&&e.type!=="evenement"&&tdInRange(e)&&isDone(e));
+  const advT =state.events.filter(e=>isLeaf(e)&&e.type!=="evenement"&&tdInRange(e)&&!isDone(e)&&(+e.progress||0)>0);
+  const hot=new Set([...doneT,...advT].map(projectOf));
+  const pool=state.events.filter(e=>isLeaf(e)&&e.type!=="evenement"&&!isDone(e)&&statusKey(e)!=="bloque"&&depState(e).ready)
+    .sort((a,b)=>{
+      const ha=hot.has(projectOf(a))?1:0,hb=hot.has(projectOf(b))?1:0;if(ha!==hb)return hb-ha;
+      const pa=+a.progress||0,pb=+b.progress||0,ia=pa>0?1:0,ib=pb>0?1:0;if(ia!==ib)return ib-ia;
+      if(pa!==pb)return pb-pa;return (a.start||"").localeCompare(b.start||"");
+    });
+  const hero=pool[0]||null, rest=hero?pool.slice(1):[];
+
+  let dstr=TODAY.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});dstr=dstr.charAt(0).toUpperCase()+dstr.slice(1);
+  const nD=doneT.length,nA=advT.length,nP=hot.size;
+  let mom;
+  if(nD+nA===0) mom=`<span class="td-momentum">Rien de coché pour l'instant, commence par la prochaine action ci-dessous.</span>`;
+  else mom=`<span class="td-momentum">✓ ${nD} terminée${nD>1?"s":""} · ◔ ${nA} avancée${nA>1?"s":""}${state.tdRange==="week"?" sur 7 jours":" aujourd'hui"} · ${nP} projet${nP>1?"s":""} touché${nP>1?"s":""}</span>`;
+
+  let heroHTML;
+  if(hero){
+    const p=projectOf(hero),pc=projColor(p);
+    const dl=hero.end?`<span>échéance : ${esc(fmtDate(parseD(hero.end)))}</span>`:"";
+    const pr=(+hero.progress||0)>0?`<span>déjà ${+hero.progress||0} %</span>`:"";
+    const note=hero.note?`<div class="hnote">${esc(hero.note)}</div>`:"";
+    heroHTML=`<div class="td-hero">
+      <div class="lab"><span class="pj-sq" style="background:${pc}"></span>Ta prochaine action</div>
+      <div class="htitle">${esc(hero.title)}</div>
+      <div class="hmeta"><span class="pj-chip"><span class="pj-sq" style="background:${pc}"></span>${esc(p)}</span>${tdStatusBadge(hero)}${pr}${dl}</div>
+      ${note}${depsLineHTML(hero)}
+      <div class="hact"><button class="btn gold" data-open="${hero.id}">Ouvrir la tâche →</button><button class="btn" data-done="${hero.id}">✓ Marquer terminée</button></div>
+    </div>`;
+  } else {
+    heroHTML=`<div class="td-hero td-emptyhero">Tout ce qui est prêt est déjà lancé. Rien ne presse côté actions débloquées : jette un œil aux tâches en attente dans l'onglet <b>Focus</b>.</div>`;
+  }
+
+  const NSHOW=3, showAll=!!state.tdMore, shown=showAll?rest:rest.slice(0,NSHOW);
+  let nextHTML = shown.length?(`<div class="rows">`+shown.map(e=>rowHTML(e)).join("")+`</div>`)
+    :`<div class="card" style="padding:16px;color:var(--faint);font-size:12.5px">Rien d'autre de prêt dans l'immédiat.</div>`;
+  const moreHTML=rest.length>NSHOW?`<div class="td-more" id="tdMore">${showAll?"Réduire":("Voir les "+(rest.length-NSHOW)+" autres")}</div>`:"";
+
+  const seg=`<div class="td-seg"><button data-r="today" aria-pressed="${state.tdRange!=="week"}">Aujourd'hui</button><button data-r="week" aria-pressed="${state.tdRange==="week"}">7 jours</button></div>`;
+  const doneAll=[...doneT,...advT].sort((a,b)=>tdStamp(b)-tdStamp(a));
+  let doneHTML;
+  if(!doneAll.length) doneHTML=`<div class="card" style="padding:18px;color:var(--faint);font-size:13px">Aucune tâche terminée ou avancée sur la période. Le premier pas est le plus rentable.</div>`;
+  else if(state.tdRange==="week"){
+    const groups={};doneAll.forEach(e=>{const k=toISO(new Date(tdStamp(e)));(groups[k]=groups[k]||[]).push(e);});
+    doneHTML=Object.keys(groups).sort((a,b)=>b.localeCompare(a)).map(k=>{
+      const lbl=(k===TODAY_ISO)?"Aujourd'hui":fmtDate(parseD(k));
+      return `<div class="td-daygrp">${lbl}</div><div class="td-done">`+groups[k].map(tdDoneItem).join("")+`</div>`;
+    }).join("");
+  } else doneHTML=`<div class="td-done">`+doneAll.map(tdDoneItem).join("")+`</div>`;
+
+  const blocked=state.events.filter(e=>isLeaf(e)&&!isDone(e)&&statusKey(e)==="bloque");
+  const overdue=state.events.filter(e=>isLeaf(e)&&!isDone(e)&&statusKey(e)!=="bloque"&&(e.end||e.start)<TODAY_ISO&&(+e.progress||0)<100);
+  const watch=blocked.map(e=>({e,why:"Bloqué",c:"var(--bad)"})).concat(overdue.map(e=>({e,why:"En retard",c:"var(--warn)"}))).slice(0,5);
+  let watchHTML="";
+  if(watch.length) watchHTML=`<div class="td-block td-watch"><div class="bh"><span class="bt">À surveiller</span><span class="bn">${blocked.length+overdue.length}</span></div>`+
+    watch.map(({e,why,c})=>`<div class="row-mini" data-open="${e.id}" style="border-left-color:${projColor(projectOf(e))}"><span class="w-why" style="color:${c}">${why}</span><span class="tt">${esc(e.title)}</span></div>`).join("")+`</div>`;
+
+  $("#view").innerHTML=`
+    <div class="td-head"><span class="td-date">${esc(dstr)}</span>${mom}</div>
+    ${heroHTML}
+    <div class="td-cols">
+      <div><div class="td-block"><div class="bh"><span class="bt">À enchaîner</span><span class="bn">${rest.length}</span></div>${nextHTML}${moreHTML}</div></div>
+      <div>
+        <div class="td-block"><div class="bh"><span class="bt">${state.tdRange==="week"?"Fait sur 7 jours":"Fait aujourd'hui"}</span>${seg}</div>${doneHTML}</div>
+        ${watchHTML}
+      </div>
+    </div>`;
+
+  wireRows($("#view"));
+  $$("#view .td-di[data-open], #view .row-mini[data-open], #view .btn[data-open]").forEach(el=>el.onclick=()=>openEvent(el.dataset.open));
+  $$("#view [data-done]").forEach(el=>el.onclick=ev=>{ev.stopPropagation();tdComplete(el.dataset.done);});
+  const mm=$("#tdMore");if(mm)mm.onclick=()=>{state.tdMore=!state.tdMore;renderView();};
+  $$("#view .td-seg button").forEach(b=>b.onclick=()=>{state.tdRange=b.dataset.r;renderView();});
+}
+
 /* ---- Vue Focus : dépendance-aware ---- */
 function renderFocus(){
   const list=visibleEvents();
@@ -1038,7 +1169,8 @@ function populateParents(excludeId){const sel=$("#fParent");if(!sel)return;
 function renderView(){
   $$(".tab").forEach(t=>t.setAttribute("aria-selected",t.dataset.view===state.view));
   const v=state.view;
-  if(v==="focus")renderFocus();
+  if(v==="today")renderToday();
+  else if(v==="focus")renderFocus();
   else if(v==="projets")renderProjets();
   else if(v==="kanban")renderKanban();
   else if(v==="gantt")renderGantt();
