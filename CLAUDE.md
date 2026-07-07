@@ -6,17 +6,19 @@ tâches, jalons, événements, avancement par projet.
 
 ## Source de vérité et déploiement (à lire en premier)
 
-Dépôt canonique (décision du 2026-07-07) : **`FiExplorer11020/triactis-suivi-implementation-ia`,
-branche `main`**. C'est le remote `origin` de ce dossier. On développe et on pousse ici.
-L'historique complet de l'app (12 commits) y a été migré depuis l'ancien dépôt, plus la
-page « Aujourd'hui ».
+Dépôt canonique et de déploiement : **`FiExplorer11020/triactis-suivi-ia`, branche `main`**
+(remote `origin` de ce dossier). On développe et on pousse ici. GitHub Pages y est actif et
+sert la page publique https://fiexplorer11020.github.io/triactis-suivi-ia/ : tout push sur
+`main` redéploie automatiquement, l'URL ne change pas.
 
-Ancien dépôt `FiExplorer11020/triactis-suivi-ia` (branche `main`) : figé, à ne plus modifier.
-C'est encore lui qui sert la page publique https://fiexplorer11020.github.io/triactis-suivi-ia/
-**tant que GitHub Pages n'a pas été rebasculé** sur le nouveau dépôt (à faire dans
-Settings > Pages du nouveau repo, source = branche `main`). Le lien public changera alors
-pour https://fiexplorer11020.github.io/triactis-suivi-implementation-ia/ (à rediffuser à
-l'équipe, avec le code d'accès inchangé).
+Historique : le 2026-07-07 on a d'abord migré vers `triactis-suivi-implementation-ia`, puis
+on est revenu sur `triactis-suivi-ia` (Pages déjà actif, URL connue de l'équipe, zéro
+friction). Le dépôt `triactis-suivi-implementation-ia` est donc un **doublon inutilisé**
+(il contient un `main` obsolète), à supprimer ou ignorer. Ne pas y pousser.
+
+Données : elles vivent dans Firestore (projet `triactis-suivi-ia`), pas dans l'hébergement.
+Le document est indexé par le hash du code d'accès. Changer l'hébergement ou l'URL ne touche
+pas les données ; seul un code d'accès différent pointerait vers un autre document.
 
 ## Architecture technique
 
