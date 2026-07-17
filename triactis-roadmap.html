@@ -715,21 +715,61 @@ function projectOf(ev){
 function projColor(key){return (PROJECTS[key]||PROJECTS.Transverse).c;}
 
 /* ----------------------------- Stockage ---------------------------------- */
-let saveTimer=null, fbDoc=null, applyingRemote=false;
+let saveTimer=null, fbDoc=null, fbDb=null, applyingRemote=false, syncedIds=new Set();
 function showToast(msg){const t=$("#toast");$("#toastTxt").textContent=msg||"Enregistré";t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),1400);}
 function setStorageUI(){
   const dot=$("#storageDot"),txt=$("#storageTxt");
   if(state.mode==="shared"){dot.className="dot live";txt.textContent="Partagé en temps réel";$("#storagePill").title="Synchronisé pour toute l'équipe";}
   else{dot.className="dot local";txt.textContent="Local (ce poste)";$("#storagePill").title="Sauvegarde sur cet appareil. Active le partage pour l'équipe.";}
 }
+/* Fusion concurrente pour écriture parallèle sûre (humains, Cowork, routine Claude Code).
+   Union par id, le plus récent (updatedAt) gagne. Les suppressions locales sont honorées
+   via baseIds (ids présents au dernier point de synchro) : un id de la base absent en local
+   est supprimé, alors qu'un id présent seulement à distance et absent de la base est un ajout
+   distant, conservé. Ferme la fenêtre de collision du set() complet non transactionnel. */
+function mergeByKey(remoteArr, localArr, keyFn){
+  const m=new Map();
+  (Array.isArray(remoteArr)?remoteArr:[]).forEach(x=>{if(x)m.set(keyFn(x),x);});
+  (Array.isArray(localArr)?localArr:[]).forEach(x=>{if(x)m.set(keyFn(x),x);}); // local gagne
+  return Array.from(m.values());
+}
+function mergeRoadmap(remote, local, baseIds){
+  const rE=Array.isArray(remote.events)?remote.events:[];
+  const lE=Array.isArray(local.events)?local.events:[];
+  const byId=new Map(); let pulled=false;
+  rE.forEach(e=>{if(e&&e.id!=null)byId.set(e.id,e);});
+  const localIds=new Set();
+  lE.forEach(e=>{
+    if(!e||e.id==null)return; localIds.add(e.id);
+    const r=byId.get(e.id);
+    if(!r){byId.set(e.id,e);}                       // ajout local
+    else{const lu=+e.updatedAt||0, ru=+r.updatedAt||0; if(ru>lu){byId.set(e.id,r);pulled=true;} else byId.set(e.id,e);}
+  });
+  byId.forEach((v,id)=>{if(!localIds.has(id)&&!baseIds.has(id))pulled=true;}); // ajout distant depuis la base
+  baseIds.forEach(id=>{if(!localIds.has(id)&&byId.has(id))byId.delete(id);});  // suppression locale honorée
+  return {events:Array.from(byId.values()),
+          projects:mergeByKey(remote.projects,local.projects,p=>p.id||p.name),
+          tags:mergeByKey(remote.tags,local.tags,t=>t.name),
+          pulled};
+}
 function persist(opts){
   opts=opts||{};
-  if(state.mode==="shared"&&fbDoc){
+  if(state.mode==="shared"&&fbDoc&&fbDb){
     state.dirtyUntil=Date.now()+1500;
     clearTimeout(saveTimer);
     saveTimer=setTimeout(()=>{
-      fbDoc.set({events:state.events,projects:state.projects,tags:state.tags,updatedAt:Date.now()}).then(()=>{if(!opts.silent)showToast("Synchronisé");})
-      .catch(err=>{console.warn(err);showToast("Hors-ligne, gardé en local");localSave();});
+      const local={events:state.events,projects:state.projects,tags:state.tags};
+      const baseIds=new Set(syncedIds);
+      fbDb.runTransaction(tx=>tx.get(fbDoc).then(snap=>{
+        const remote=snap.exists?snap.data():{events:[],projects:[],tags:[]};
+        const merged=mergeRoadmap(remote,local,baseIds);
+        tx.set(fbDoc,{events:merged.events,projects:merged.projects,tags:merged.tags,updatedAt:Date.now()});
+        return merged;
+      })).then(merged=>{
+        syncedIds=new Set(merged.events.map(e=>e&&e.id));
+        if(merged.pulled){applyingRemote=true;state.events=merged.events;state.projects=merged.projects;state.tags=merged.tags;applyingRemote=false;rebuildTaxonomy();renderAll();}
+        if(!opts.silent)showToast("Synchronisé");
+      }).catch(err=>{console.warn(err);showToast("Hors-ligne, gardé en local");localSave();});
     },opts.now?0:350);
     localSave(); // mirror locally too
   }else{
@@ -750,7 +790,7 @@ async function tryStartFirebase(){
     await loadScript("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js");
     if(!window.firebase)throw new Error("SDK indisponible");
     if(!firebase.apps.length)firebase.initializeApp(cfg);
-    const db=firebase.firestore();
+    const db=firebase.firestore(); fbDb=db;
     const docId="roadmap-"+hashCode((ACCESS_CODE||"")+"-triactis");
     fbDoc=db.collection("roadmaps").doc(docId);
     await new Promise((resolve)=>{
@@ -758,9 +798,9 @@ async function tryStartFirebase(){
       fbDoc.onSnapshot(snap=>{
         if(Date.now()<state.dirtyUntil&&!first){return;} // ignore echoes during local edits
         const data=snap.data();
-        if(data&&Array.isArray(data.events)){applyingRemote=true;state.events=data.events;if(Array.isArray(data.projects)&&data.projects.length){state.projects=data.projects;state.tags=Array.isArray(data.tags)?data.tags:[];}applyingRemote=false;rebuildTaxonomy();renderAll();}
+        if(data&&Array.isArray(data.events)){applyingRemote=true;state.events=data.events;syncedIds=new Set(data.events.map(e=>e&&e.id));if(Array.isArray(data.projects)&&data.projects.length){state.projects=data.projects;state.tags=Array.isArray(data.tags)?data.tags:[];}applyingRemote=false;rebuildTaxonomy();renderAll();}
         else if(first){
-          fbDoc.set({events:state.events,projects:state.projects,tags:state.tags,updatedAt:Date.now()});
+          fbDoc.set({events:state.events,projects:state.projects,tags:state.tags,updatedAt:Date.now()});syncedIds=new Set(state.events.map(e=>e&&e.id));
         }
         if(first){first=false;resolve();}
       },err=>{console.warn(err);if(first){first=false;resolve();}});
