@@ -11,6 +11,12 @@ Dépôt canonique et de déploiement : **`FiExplorer11020/triactis-suivi-ia`, br
 sert la page publique https://fiexplorer11020.github.io/triactis-suivi-ia/ : tout push sur
 `main` redéploie automatiquement, l'URL ne change pas.
 
+Workflow d'écriture (validé par Oscar, 2026-07-24) : **pousser directement sur `main`**,
+sans branche ni demande de validation préalable. Avant chaque push, garde-fou minimal :
+vérifier rapidement que la page se charge sans erreur console, recopier `index.html` dans
+`triactis-roadmap.html` (copie identique), puis `git commit` et `git push origin main`.
+Le déploiement GitHub Pages est immédiat.
+
 Historique : le 2026-07-07 on a d'abord migré vers `triactis-suivi-implementation-ia`, puis
 on est revenu sur `triactis-suivi-ia` (Pages déjà actif, URL connue de l'équipe, zéro
 friction). Le dépôt `triactis-suivi-implementation-ia` est donc un **doublon inutilisé**
